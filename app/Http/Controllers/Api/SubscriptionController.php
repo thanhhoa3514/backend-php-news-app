@@ -1,0 +1,157 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Subscription;
+use App\Models\Plan;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+class SubscriptionController extends Controller
+{
+    /**
+     * Display a listing of subscriptions
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $perPage = $request->get('per_page', 15);
+        $status = $request->get('status');
+        $userId = $request->get('user_id');
+
+        $query = Subscription::with(['user', 'plan']);
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        $subscriptions = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+        return response()->json($subscriptions);
+    }
+
+    /**
+     * Display the specified subscription
+     */
+    public function show(string $id): JsonResponse
+    {
+        $subscription = Subscription::with(['user', 'plan'])->findOrFail($id);
+
+        return response()->json($subscription);
+    }
+
+    /**
+     * Store a newly created subscription
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'plan_id' => 'required|exists:plans,id',
+            'start_date' => 'nullable|date',
+            'payment_method' => 'required|string|max:50',
+            'transaction_id' => 'nullable|string|max:255',
+        ]);
+
+        $plan = Plan::findOrFail($validated['plan_id']);
+
+        if (!isset($validated['start_date'])) {
+            $validated['start_date'] = now();
+        }
+
+        $validated['end_date'] = now()->parse($validated['start_date'])->addDays($plan->duration_days);
+        $validated['status'] = 'pending';
+
+        $subscription = Subscription::create($validated);
+        $subscription->load(['user', 'plan']);
+
+        return response()->json($subscription, 201);
+    }
+
+    /**
+     * Update the specified subscription
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $subscription = Subscription::findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'sometimes|required|in:active,expired,cancelled,pending',
+            'start_date' => 'sometimes|required|date',
+            'end_date' => 'sometimes|required|date',
+            'payment_method' => 'sometimes|required|string|max:50',
+            'transaction_id' => 'nullable|string|max:255',
+        ]);
+
+        $subscription->update($validated);
+        $subscription->load(['user', 'plan']);
+
+        return response()->json($subscription);
+    }
+
+    /**
+     * Cancel the specified subscription
+     */
+    public function cancel(string $id): JsonResponse
+    {
+        $subscription = Subscription::findOrFail($id);
+
+        if ($subscription->status === 'cancelled') {
+            return response()->json([
+                'message' => 'Subscription is already cancelled'
+            ], 400);
+        }
+
+        $subscription->update(['status' => 'cancelled']);
+
+        return response()->json([
+            'message' => 'Subscription cancelled successfully',
+            'subscription' => $subscription
+        ]);
+    }
+
+    /**
+     * Activate the specified subscription
+     */
+    public function activate(string $id): JsonResponse
+    {
+        $subscription = Subscription::findOrFail($id);
+
+        if ($subscription->status === 'active') {
+            return response()->json([
+                'message' => 'Subscription is already active'
+            ], 400);
+        }
+
+        if ($subscription->hasExpired()) {
+            return response()->json([
+                'message' => 'Cannot activate expired subscription'
+            ], 400);
+        }
+
+        $subscription->update(['status' => 'active']);
+
+        return response()->json([
+            'message' => 'Subscription activated successfully',
+            'subscription' => $subscription
+        ]);
+    }
+
+    /**
+     * Remove the specified subscription
+     */
+    public function destroy(string $id): JsonResponse
+    {
+        $subscription = Subscription::findOrFail($id);
+        $subscription->delete();
+
+        return response()->json([
+            'message' => 'Subscription deleted successfully'
+        ]);
+    }
+}
+

@@ -1,0 +1,28 @@
+### Test OTP Send API
+POST http://localhost:8000/api/v1/otp/send
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "test@example.com"
+}
+
+### Test OTP Verify API
+POST http://localhost:8000/api/v1/otp/verify
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "test@example.com",
+  "otp": "123456"
+}
+
+### Test OTP Status API
+POST http://localhost:8000/api/v1/otp/status
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "test@example.com"
+}
+
