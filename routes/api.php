@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\PlanController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\OtpController;
+use App\Http\Controllers\Api\AiGenerationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -68,6 +69,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')->group(function () {
             Route::get('/all', [NewsController::class, 'all']);
             Route::post('/', [NewsController::class, 'store']);
+            Route::post('/ai-generate', [NewsController::class, 'generateAi']);
             Route::put('/{id}', [NewsController::class, 'update']);
             Route::patch('/{id}', [NewsController::class, 'update']);
             Route::delete('/{id}', [NewsController::class, 'destroy']);
@@ -158,6 +160,14 @@ Route::prefix('v1')->group(function () {
         Route::put('/{id}', [PermissionController::class, 'update']);
         Route::patch('/{id}', [PermissionController::class, 'update']);
         Route::delete('/{id}', [PermissionController::class, 'destroy']);
+    });
+
+    // AI Generation routes (protected)
+    Route::middleware('auth:api')->prefix('ai-generations')->group(function () {
+        Route::get('/', [AiGenerationController::class, 'index']);
+        Route::get('/{id}', [AiGenerationController::class, 'show']);
+        Route::post('/', [AiGenerationController::class, 'store']);
+        Route::post('/{id}/save', [AiGenerationController::class, 'markAsSaved']);
     });
 });
 

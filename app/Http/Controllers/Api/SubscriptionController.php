@@ -18,15 +18,20 @@ class SubscriptionController extends Controller
         $perPage = $request->get('per_page', 15);
         $status = $request->get('status');
         $userId = $request->get('user_id');
+        $planId = $request->get('plan_id');
 
         $query = Subscription::with(['user', 'plan']);
 
-        if ($status) {
+        if ($status && $status !== 'all') {
             $query->where('status', $status);
         }
 
         if ($userId) {
             $query->where('user_id', $userId);
+        }
+
+        if ($planId && $planId !== 'all') {
+            $query->where('plan_id', $planId);
         }
 
         $subscriptions = $query->orderBy('created_at', 'desc')->paginate($perPage);

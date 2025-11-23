@@ -7,7 +7,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\Log;
 class CategoryController extends Controller
 {
     /**
@@ -27,6 +27,7 @@ class CategoryController extends Controller
      */
     public function show(string $slug): JsonResponse
     {
+        Log::info('Category slug: ' . $slug);
         $category = Category::where('slug', $slug)
             ->withCount('news')
             ->firstOrFail();
@@ -39,6 +40,7 @@ class CategoryController extends Controller
      */
     public function news(Request $request, string $slug): JsonResponse
     {
+        Log::info('Category slug: ' . $slug);
         $perPage = $request->get('per_page', 10);
         
         $category = Category::where('slug', $slug)->firstOrFail();
@@ -68,7 +70,7 @@ class CategoryController extends Controller
         }
 
         $category = Category::create($validated);
-
+        Log::info('Category created: ' . $category->id);
         return response()->json($category, 201);
     }
 
@@ -88,7 +90,7 @@ class CategoryController extends Controller
         if (isset($validated['name']) && !isset($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
-
+        Log::info('Category updated: ' . $category->id);
         $category->update($validated);
 
         return response()->json($category);

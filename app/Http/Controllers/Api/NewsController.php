@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\News;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class NewsController extends Controller
 {
@@ -38,13 +39,42 @@ class NewsController extends Controller
     /**
      * Display all news (for admin)
      */
+    /**
+     * Display all news (for admin)
+     */
     public function all(Request $request): JsonResponse
     {
         $perPage = $request->get('per_page', 10);
+        $categoryId = $request->get('category_id');
+        $status = $request->get('status');
+        $search = $request->get('q');
         
-        $news = News::with(['category', 'user', 'tags'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        $query = News::with(['category', 'user', 'tags'])
+            ->orderBy('created_at', 'desc');
+
+        if ($categoryId && $categoryId !== 'all') {
+            $query->where('category_id', $categoryId);
+        }
+
+        if ($search) {
+            $query->search($search);
+        }
+
+        if ($status && $status !== 'all') {
+            switch ($status) {
+                case 'published':
+                    $query->where('published_at', '<=', now());
+                    break;
+                case 'draft':
+                    $query->whereNull('published_at');
+                    break;
+                case 'pending':
+                    $query->where('published_at', '>', now());
+                    break;
+            }
+        }
+
+        $news = $query->paginate($perPage);
 
         return response()->json($news);
     }
@@ -160,6 +190,50 @@ class NewsController extends Controller
         return response()->json([
             'message' => 'News deleted successfully'
         ]);
+    }
+
+    /**
+     * Generate AI news using Gemini API
+     */
+    public function generateAi(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category' => 'required|string',
+            'count' => 'required|integer|min:1|max:5',
+            'language' => 'required|string',
+            'tone' => 'required|string',
+            'length' => 'required|string',
+            'prompt' => 'nullable|string',
+        ]);
+
+        Log::info('Gemini API Request: ' . json_encode($validated));
+        try {
+            $geminiService = app(\App\Services\GeminiService::class);
+            
+            $articles = $geminiService->generateArticles($validated);
+            Log::info('Gemini API Articles: ' . json_encode($articles));
+
+            // Save to Database
+            $generation = \App\Models\AiGeneration::create([
+                'user_id' => auth()->id(),
+                'category' => $validated['category'],
+                'prompt' => $validated['prompt'] ?? null,
+                'generated_content' => $articles,
+                'status' => 'draft'
+            ]);
+
+            return response()->json([
+                'data' => $articles,
+                'generation_id' => $generation->id,
+                'message' => 'Articles generated and saved to history successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Gemini API Error: ' . $e->getMessage());
+            return response()->json([
+                'data' => [],
+                'message' => 'Failed to generate articles: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }
 
