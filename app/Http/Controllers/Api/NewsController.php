@@ -20,6 +20,7 @@ class NewsController extends Controller
         $perPage = $request->get('per_page', 10);
         $categoryId = $request->get('category_id');
         $isPremium = $request->get('is_premium');
+        $tagId = $request->get('tag_id');
         
         $query = News::with(['category', 'user', 'tags'])
             ->published()
@@ -31,6 +32,13 @@ class NewsController extends Controller
 
         if ($isPremium !== null) {
             $query->where('is_premium', filter_var($isPremium, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        // Filter by tag
+        if ($tagId) {
+            $query->whereHas('tags', function ($q) use ($tagId) {
+                $q->where('tags.id', $tagId);
+            });
         }
 
         $news = $query->paginate($perPage);
