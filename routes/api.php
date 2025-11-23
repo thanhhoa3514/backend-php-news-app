@@ -94,8 +94,7 @@ Route::prefix('v1')->group(function () {
     // Tag routes (public read, protected write)
     Route::prefix('tags')->group(function () {
         Route::get('/', [TagController::class, 'index']);
-        Route::get('/{slug}', [TagController::class, 'show']);
-        Route::get('/{slug}/news', [TagController::class, 'news']);
+        Route::get('/{id}', [TagController::class, 'show']);
         
         Route::middleware('auth:api')->group(function () {
             Route::post('/', [TagController::class, 'store']);

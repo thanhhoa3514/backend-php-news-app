@@ -11,58 +11,46 @@ use Illuminate\Support\Str;
 class TagController extends Controller
 {
     /**
-     * Display a listing of tags
+     * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $tags = Tag::withCount('news')
-            ->orderBy('name')
-            ->get();
+        $perPage = $request->get('per_page', 10);
+        $search = $request->get('q');
+        $all = $request->get('all'); // If true, return all tags without pagination
+
+        $query = Tag::withCount('news');
+
+        if ($search) {
+            $query->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%");
+        }
+
+        $query->orderBy('created_at', 'desc');
+
+        if ($all) {
+            $tags = $query->get();
+            return response()->json($tags);
+        }
+
+        $tags = $query->paginate($perPage);
 
         return response()->json($tags);
     }
 
     /**
-     * Display the specified tag
-     */
-    public function show(string $slug): JsonResponse
-    {
-        $tag = Tag::where('slug', $slug)
-            ->withCount('news')
-            ->firstOrFail();
-
-        return response()->json($tag);
-    }
-
-    /**
-     * Get news with this tag
-     */
-    public function news(Request $request, string $slug): JsonResponse
-    {
-        $perPage = $request->get('per_page', 10);
-        
-        $tag = Tag::where('slug', $slug)->firstOrFail();
-        
-        $news = $tag->news()
-            ->with(['category', 'user', 'tags'])
-            ->published()
-            ->orderBy('published_at', 'desc')
-            ->paginate($perPage);
-
-        return response()->json($news);
-    }
-
-    /**
-     * Store a newly created tag
+     * Store a newly created resource in storage.
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:255|unique:tags,name',
             'slug' => 'nullable|string|max:255|unique:tags,slug',
+            'description' => 'nullable|string',
+            'color' => 'nullable|string|max:7', // Hex color e.g. #FF0000
         ]);
 
-        if (!isset($validated['slug'])) {
+        if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
 
@@ -72,18 +60,29 @@ class TagController extends Controller
     }
 
     /**
-     * Update the specified tag
+     * Display the specified resource.
+     */
+    public function show(string $id): JsonResponse
+    {
+        $tag = Tag::withCount('news')->findOrFail($id);
+        return response()->json($tag);
+    }
+
+    /**
+     * Update the specified resource in storage.
      */
     public function update(Request $request, string $id): JsonResponse
     {
         $tag = Tag::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'slug' => 'sometimes|required|string|max:255|unique:tags,slug,' . $id,
+            'name' => 'sometimes|required|string|max:255|unique:tags,name,' . $id,
+            'slug' => 'nullable|string|max:255|unique:tags,slug,' . $id,
+            'description' => 'nullable|string',
+            'color' => 'nullable|string|max:7',
         ]);
 
-        if (isset($validated['name']) && !isset($validated['slug'])) {
+        if (isset($validated['name']) && empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
         }
 
@@ -93,11 +92,15 @@ class TagController extends Controller
     }
 
     /**
-     * Remove the specified tag
+     * Remove the specified resource from storage.
      */
     public function destroy(string $id): JsonResponse
     {
         $tag = Tag::findOrFail($id);
+        
+        // Detach from all news first (although cascade delete on foreign key might handle this, explicit is safe)
+        $tag->news()->detach();
+        
         $tag->delete();
 
         return response()->json([
@@ -105,4 +108,3 @@ class TagController extends Controller
         ]);
     }
 }
-
