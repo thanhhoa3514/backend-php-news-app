@@ -92,7 +92,7 @@ Requirements:
 IMPORTANT: Return ONLY a valid JSON array. Each article object must have these exact fields:
 - title (string): Compelling headline
 - summary (string): Brief 2-3 sentence summary
-- content (string): Full article in HTML format
+- content (string): Full article in HTML format much longer than 2000 words
 - image_keyword (string): 2-3 keywords for image search
 
 Example format:

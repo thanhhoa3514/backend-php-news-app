@@ -7,6 +7,7 @@ use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class TagController extends Controller
 {
@@ -15,6 +16,7 @@ class TagController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        Log::info($request->all());
         $perPage = $request->get('per_page', 10);
         $search = $request->get('q');
         $all = $request->get('all'); // If true, return all tags without pagination
@@ -43,6 +45,7 @@ class TagController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        Log::info($request->all());
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:tags,name',
             'slug' => 'nullable|string|max:255|unique:tags,slug',
@@ -54,8 +57,9 @@ class TagController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
         }
 
+        Log::info($validated);
         $tag = Tag::create($validated);
-
+        Log::info($tag);
         return response()->json($tag, 201);
     }
 
@@ -73,6 +77,7 @@ class TagController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        Log::info($request->all());
         $tag = Tag::findOrFail($id);
 
         $validated = $request->validate([
@@ -86,6 +91,7 @@ class TagController extends Controller
             $validated['slug'] = Str::slug($validated['name']);
         }
 
+        Log::info($validated);
         $tag->update($validated);
 
         return response()->json($tag);
