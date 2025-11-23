@@ -20,7 +20,7 @@ class Tag extends Model
      */
     public function news(): BelongsToMany
     {
-        return $this->belongsToMany(News::class, 'news_tags');
+        return $this->belongsToMany(News::class, 'news_tag');
     }
 }
 
