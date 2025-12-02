@@ -70,38 +70,47 @@ private string $baseUrl = 'https://generativelanguage.googleapis.com/v1/models/'
         $customPrompt = $params['prompt'] ?? '';
 
         $lengthGuide = match($length) {
-            'short' => 'under 300 words',
-            'medium' => 'between 300-1000 words',
-            'long' => 'over 1000 words',
-            default => 'between 300-1000 words'
+            'short' => 'approx. 1000 words',
+            'medium' => 'approx. 2000-2500 words',
+            'long' => 'detailed, in-depth article over 3000 words',
+            default => 'approx. 2000 words'
+        };
+
+        $structureGuide = match($length) {
+            'short' => 'Include an introduction, 2-3 body paragraphs, and a conclusion.',
+            'medium' => 'Include a catchy introduction, 4-5 detailed sections with headings, and a strong conclusion.',
+            'long' => 'Include a comprehensive introduction, multiple in-depth sections with h2 and h3 headings, bullet points, analysis, and a thought-provoking conclusion.',
+            default => 'Standard article structure with introduction, body, and conclusion.'
         };
 
         $prompt = <<<PROMPT
-You are a professional news writer. Generate {$count} unique and realistic news articles about {$category}.
+You are a senior professional news editor and writer. Generate {$count} unique, high-quality, and realistic news articles about "{$category}".
 
 Requirements:
 - Language: {$language}
 - Tone: {$tone}
-- Article length: {$lengthGuide}
-- Each article must be complete, informative, and well-structured
-- Content must be in HTML format with proper tags (p, h2, h3, ul, li, strong, em)
-- Make the articles current and relevant to today's trends
+- Target Length: {$lengthGuide}
+- Structure: {$structureGuide}
+- Format: HTML (use <p>, <h2>, <h3>, <ul>, <li>, <strong>, <em>). Do NOT use <h1>, <html>, <head>, or <body> tags.
+- Content: Must be original, engaging, and relevant to current trends. Avoid generic fillers.
+- Images: Suggest 2-3 specific, relevant keywords for finding a stock image.
 
 {$customPrompt}
 
-IMPORTANT: Return ONLY a valid JSON array. Each article object must have these exact fields:
-- title (string): Compelling headline
-- summary (string): Brief 2-3 sentence summary
-- content (string): Full article in HTML format much longer than 2000 words
-- image_keyword (string): 2-3 keywords for image search
+IMPORTANT: Return ONLY a valid JSON array. Do not include markdown formatting (like ```json).
+Each article object must have these exact fields:
+- title (string): A catchy, SEO-friendly headline.
+- summary (string): A compelling 2-3 sentence summary/excerpt.
+- content (string): The full HTML article content. Ensure it meets the length requirement of {$lengthGuide}.
+- image_keyword (string): English keywords for image search (e.g., "business meeting office", "future technology ai").
 
 Example format:
 [
   {
-    "title": "Breaking News in Technology",
-    "summary": "A comprehensive look at the latest developments.",
-    "content": "<p>Detailed article content here...</p><h2>Section Title</h2><p>More content...</p>",
-    "image_keyword": "technology innovation"
+    "title": "The Future of AI in Healthcare",
+    "summary": "How artificial intelligence is revolutionizing patient care and diagnosis.",
+    "content": "<p>Introduction...</p><h2>Key Benefits</h2><p>Details...</p>...",
+    "image_keyword": "doctor using tablet hospital"
   }
 ]
 

@@ -173,11 +173,17 @@ class NewsController extends Controller
     {
         $news = News::findOrFail($id);
 
+        // Check if thumbnail is a file or string
+        $thumbnailRule = 'nullable|string|max:500';
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailRule = 'nullable|image|max:5120'; // 5MB max for file uploads
+        }
+
         $validated = $request->validate([
             'title' => 'sometimes|required|string|max:255',
             'slug' => 'sometimes|required|string|max:255|unique:news,slug,' . $id,
             'content' => 'sometimes|required|string',
-            'thumbnail' => 'nullable|string|max:500',
+            'thumbnail' => $thumbnailRule,
             'category_id' => 'sometimes|required|exists:categories,id',
             'user_id' => 'sometimes|required|exists:users,id',
             'published_at' => 'nullable|date',
@@ -185,6 +191,15 @@ class NewsController extends Controller
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
         ]);
+
+        // Handle file upload to Cloudinary
+        if ($request->hasFile('thumbnail')) {
+            $imageService = new ImageService();
+            $validated['thumbnail'] = $imageService->uploadFromFile(
+                $request->file('thumbnail'),
+                'news_thumbnails'
+            );
+        }
 
         $tags = $validated['tags'] ?? null;
         unset($validated['tags']);
