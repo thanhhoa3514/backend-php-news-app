@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\OtpController;
 use App\Http\Controllers\Api\AiGenerationController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\WebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,7 +28,9 @@ use App\Http\Controllers\Api\AiGenerationController;
 |
 */
 
-
+// Stripe Webhook - MUST be outside v1 prefix and without auth
+// Using withoutMiddleware to bypass CSRF (important for Stripe webhooks)
+Route::post('/webhook/stripe', [WebhookController::class, 'handleWebhook']);
 
 // API Version 1
 Route::prefix('v1')->group(function () {
@@ -50,6 +54,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/refresh', [AuthController::class, 'refresh']);
             Route::post('/revoke-all', [AuthController::class, 'revokeAll']);
             Route::post('/change-password', [AuthController::class, 'changePassword']);
+            Route::post('/update-profile', [AuthController::class, 'updateProfile']);
         });
     });
 
@@ -94,7 +99,8 @@ Route::prefix('v1')->group(function () {
     // Tag routes (public read, protected write)
     Route::prefix('tags')->group(function () {
         Route::get('/', [TagController::class, 'index']);
-        Route::get('/{id}', [TagController::class, 'show']);
+        Route::get('/{idOrSlug}', [TagController::class, 'show']);
+        Route::get('/{idOrSlug}/news', [TagController::class, 'news']);
         
         Route::middleware('auth:api')->group(function () {
             Route::post('/', [TagController::class, 'store']);
@@ -119,6 +125,7 @@ Route::prefix('v1')->group(function () {
 
     // Subscription routes (protected)
     Route::middleware('auth:api')->prefix('subscriptions')->group(function () {
+        Route::post('/create-checkout-session', [PaymentController::class, 'createCheckoutSession']);
         Route::get('/', [SubscriptionController::class, 'index']);
         Route::get('/{id}', [SubscriptionController::class, 'show']);
         Route::post('/', [SubscriptionController::class, 'store']);
