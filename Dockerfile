@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     nginx \
-    libpq-dev # Thêm thư viện này để kết nối PostgreSQL
+    && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt các PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+# Cài đặt các PHP extensions (pdo_mysql cho TiDB Cloud/MySQL)
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
 
 # Cài đặt Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
