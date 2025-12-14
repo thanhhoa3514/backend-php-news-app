@@ -73,6 +73,31 @@ class TagController extends Controller
     }
 
     /**
+     * Get news by tag (by id or slug)
+     */
+    public function news(Request $request, string $idOrSlug): JsonResponse
+    {
+        $perPage = $request->get('per_page', 10);
+
+        // Find tag by id or slug
+        $tag = Tag::where('id', $idOrSlug)
+            ->orWhere('slug', $idOrSlug)
+            ->firstOrFail();
+
+        $news = $tag->news()
+            ->with(['category', 'user', 'tags'])
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->orderBy('published_at', 'desc')
+            ->paginate($perPage);
+
+        return response()->json([
+            'tag' => $tag,
+            'news' => $news
+        ]);
+    }
+
+    /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id): JsonResponse

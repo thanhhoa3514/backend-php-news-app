@@ -305,5 +305,35 @@ class AuthController extends Controller
             'message' => 'Password changed successfully'
         ]);
     }
+
+    /**
+     * Update profile (name, avatar only - email cannot be changed)
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'avatar' => 'nullable|image|max:5120', // 5MB max for file uploads
+        ]);
+
+        $user = auth()->user();
+
+        // Handle avatar file upload
+        if ($request->hasFile('avatar')) {
+            $imageService = new \App\Services\ImageService();
+            $validated['avatar'] = $imageService->uploadFromFile(
+                $request->file('avatar'),
+                'avatars'
+            );
+        }
+
+        $user->update($validated);
+        $user->load('roles');
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => $user
+        ]);
+    }
 }
 
