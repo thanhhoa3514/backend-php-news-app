@@ -151,12 +151,12 @@ class AuthController extends Controller
         $response = response()->json([
             'message' => 'Login successful',
             'user' => $user,
-            // 'token' => $token, // Do not return token in body
+            'token' => $token, // Return token in body for localStorage storage
             'token_type' => 'bearer',
             'expires_in' => $expiresIn
         ]);
 
-        // Always set httpOnly cookie with SameSite=none for cross-domain
+        // Also set httpOnly cookie as backup (may not work with third-party cookie blocking)
         $response->cookie(
             'jwt_token',
             $token,

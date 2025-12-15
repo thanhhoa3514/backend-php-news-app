@@ -54,20 +54,25 @@ class SocialAuthController extends Controller
             
             $expiresIn = JWTAuth::factory()->getTTL() * 60;
             
-            // Redirect to frontend with user data only
+            // Redirect to frontend with user data AND token
+            // Token is passed via URL for localStorage storage (since cross-origin cookies don't work)
             $frontendCallback = config('app.frontend_auth_callback', env('FRONTEND_AUTH_CALLBACK', 'http://localhost:3000/auth/callback'));
             
-            $response = redirect()->to(
-                $frontendCallback . '?user=' . urlencode(json_encode([
+            $queryParams = http_build_query([
+                'user' => json_encode([
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
                     'avatar' => $user->avatar,
                     'roles' => $user->roles->pluck('slug'),
-                ]))
-            );
+                ]),
+                'token' => $token, // Pass token for localStorage storage
+                'expires_in' => $expiresIn,
+            ]);
             
-            // Set HttpOnly cookie with SameSite=none for cross-domain
+            $response = redirect()->to($frontendCallback . '?' . $queryParams);
+            
+            // Also set HttpOnly cookie as backup
             $response->cookie(
                 'jwt_token',
                 $token,
