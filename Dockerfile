@@ -84,7 +84,13 @@ if [ -z "$APP_KEY" ]; then \n\
     php artisan key:generate --force \n\
 fi \n\
 \n\
-# Cache config và routes cho production \n\
+# Clear cache cũ trước \n\
+php artisan config:clear \n\
+php artisan cache:clear \n\
+php artisan route:clear \n\
+php artisan view:clear \n\
+\n\
+# Cache lại config và routes cho production \n\
 php artisan config:cache \n\
 php artisan route:cache \n\
 php artisan view:cache \n\
