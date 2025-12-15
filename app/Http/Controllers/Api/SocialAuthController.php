@@ -67,17 +67,17 @@ class SocialAuthController extends Controller
                 ]))
             );
             
-            // Set HttpOnly cookie with token
+            // Set HttpOnly cookie with SameSite=none for cross-domain
             $response->cookie(
                 'jwt_token',
                 $token,
                 $expiresIn / 60, // minutes
                 '/',
                 null,
-                app()->isProduction(), // secure (true in production, false in dev)
+                true, // secure (required for SameSite=none)
                 true, // httpOnly
                 false,
-                'lax' // SameSite
+                'none' // SameSite: none for cross-domain cookies
             );
             
             return $response;

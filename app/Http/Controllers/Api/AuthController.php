@@ -156,17 +156,17 @@ class AuthController extends Controller
             'expires_in' => $expiresIn
         ]);
 
-        // Always set httpOnly cookie
+        // Always set httpOnly cookie with SameSite=none for cross-domain
         $response->cookie(
             'jwt_token',
             $token,
             $expiresIn / 60, // minutes
             '/',
             null,
-            app()->isProduction(), // secure (true in production, false in dev)
+            true, // secure (required for SameSite=none)
             true, // httpOnly
             false,
-            'lax' // SameSite: Lax is better for navigation between sites (like OAuth)
+            'none' // SameSite: none for cross-domain cookies
         );
 
         return $response;
@@ -184,17 +184,17 @@ class AuthController extends Controller
                 'message' => 'Logged out successfully'
             ]);
 
-            // Always clear cookie
+            // Always clear cookie with SameSite=none for cross-domain
             $response->cookie(
                 'jwt_token',
                 '',
                 -1, // expire immediately
                 '/',
                 null,
-                app()->isProduction(),
+                true, // secure (required for SameSite=none)
                 true,
                 false,
-                'lax'
+                'none' // SameSite: none for cross-domain cookies
             );
 
             return $response;
@@ -240,17 +240,17 @@ class AuthController extends Controller
                 'expires_in' => $expiresIn
             ]);
 
-            // Set new httpOnly cookie
+            // Set new httpOnly cookie with SameSite=none for cross-domain
             $response->cookie(
                 'jwt_token',
                 $token,
                 $expiresIn / 60, // minutes
                 '/',
                 null,
-                app()->isProduction(), // secure
+                true, // secure (required for SameSite=none)
                 true, // httpOnly
                 false,
-                'lax' // SameSite
+                'none' // SameSite: none for cross-domain cookies
             );
 
             return $response;
