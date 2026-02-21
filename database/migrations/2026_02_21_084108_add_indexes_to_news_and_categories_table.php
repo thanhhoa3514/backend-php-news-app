@@ -14,12 +14,7 @@ return new class extends Migration
         Schema::table('news', function (Blueprint $table) {
             $table->index('category_id');
             $table->index('published_at');
-            $table->index('slug');
             $table->index('is_premium');
-        });
-
-        Schema::table('categories', function (Blueprint $table) {
-            $table->index('slug');
         });
     }
 
@@ -31,12 +26,7 @@ return new class extends Migration
         Schema::table('news', function (Blueprint $table) {
             $table->dropIndex(['category_id']);
             $table->dropIndex(['published_at']);
-            $table->dropIndex(['slug']);
             $table->dropIndex(['is_premium']);
-        });
-
-        Schema::table('categories', function (Blueprint $table) {
-            $table->dropIndex(['slug']);
         });
     }
 };

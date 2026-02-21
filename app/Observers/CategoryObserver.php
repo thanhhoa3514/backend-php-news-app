@@ -10,7 +10,7 @@ class CategoryObserver
     /**
      * Clear category related caches
      */
-    private function clearCache(Category $category = null): void
+    private function clearCache(?Category $category = null): void
     {
         Cache::forget('categories.all');
         if ($category) {
@@ -31,6 +31,9 @@ class CategoryObserver
      */
     public function updated(Category $category): void
     {
+        if($category->wasChanged()){
+            Cache::forget('category.detail.' . $category->getOriginal('slug'));
+        }
         $this->clearCache($category);
     }
 
