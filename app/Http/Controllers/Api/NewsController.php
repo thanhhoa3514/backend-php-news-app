@@ -17,6 +17,7 @@ class NewsController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+
         +$cacheKey = 'news.index.' . md5(json_encode([
    'category_id' => $categoryId,
     'is_premium'  => $isPremium,
@@ -45,6 +46,7 @@ class NewsController extends Controller
 
             return $query->paginate($perPage);
         };
+
 
         if (config('cache.default') === 'redis' || config('cache.default') === 'memcached') {
             $news = \Illuminate\Support\Facades\Cache::tags(['news'])->remember($cacheKey, 3600, $fetchData);
@@ -297,6 +299,7 @@ class NewsController extends Controller
         $generationId = $validated['generation_id'];
         
         $tempUrl = $article['thumbnail'] ?? null;
+
         
         if (!empty($tempUrl) && filter_var($tempUrl, FILTER_VALIDATE_URL)) {
             $article['thumbnail'] = $tempUrl;
@@ -304,6 +307,7 @@ class NewsController extends Controller
             $article['thumbnail'] = null;
             $tempUrl = null;
         }
+
 
         // Generate slug from title
         $article['slug'] = \Str::slug($article['title']) . '-' . time();
@@ -317,7 +321,7 @@ class NewsController extends Controller
         AiGeneration::where('id', $generationId)->update(['status' => 'saved']);
 
         // Dispatch background job for image upload
-        if (!empty($article['thumbnail'])) {
+        if (!empty($tempUrl) && filter_var($tempUrl, FILTER_VALIDATE_URL)) {
             \App\Jobs\UploadCloudinaryImageJob::dispatch($news->id, $tempUrl);
         }
 

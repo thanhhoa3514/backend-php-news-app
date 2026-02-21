@@ -82,7 +82,9 @@ autostart=true \n\
 autorestart=true \n\
 stopasgroup=true \n\
 killasgroup=true \n\
+
 user=www-data \n\
+
 numprocs=2' > /etc/supervisor/conf.d/supervisord.conf
 
 # Tạo script khởi động
