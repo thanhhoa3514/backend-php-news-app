@@ -22,26 +22,35 @@ class NewsController extends Controller
         $isPremium = $request->get('is_premium');
         $tagId = $request->get('tag_id');
         
-        $query = News::with(['category', 'user', 'tags'])
-            ->published()
-            ->orderBy('published_at', 'desc');
+        $cacheKey = 'news.index.' . md5(json_encode($request->all()));
 
-        if ($categoryId) {
-            $query->where('category_id', $categoryId);
+        $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
+            $query = News::with(['category', 'user', 'tags'])
+                ->published()
+                ->orderBy('published_at', 'desc');
+
+            if ($categoryId) {
+                $query->where('category_id', $categoryId);
+            }
+
+            if ($isPremium !== null) {
+                $query->where('is_premium', filter_var($isPremium, FILTER_VALIDATE_BOOLEAN));
+            }
+
+            if ($tagId) {
+                $query->whereHas('tags', function ($q) use ($tagId) {
+                    $q->where('tags.id', $tagId);
+                });
+            }
+
+            return $query->paginate($perPage);
+        };
+
+        if (config('cache.default') === 'redis' || config('cache.default') === 'memcached') {
+            $news = \Illuminate\Support\Facades\Cache::tags(['news'])->remember($cacheKey, 3600, $fetchData);
+        } else {
+            $news = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, $fetchData);
         }
-
-        if ($isPremium !== null) {
-            $query->where('is_premium', filter_var($isPremium, FILTER_VALIDATE_BOOLEAN));
-        }
-
-        // Filter by tag
-        if ($tagId) {
-            $query->whereHas('tags', function ($q) use ($tagId) {
-                $q->where('tags.id', $tagId);
-            });
-        }
-
-        $news = $query->paginate($perPage);
 
         return response()->json($news);
     }
@@ -229,7 +238,7 @@ class NewsController extends Controller
     }
 
     /**
-     * Generate AI news using Gemini API
+     * Generate AI news using Gemini API (Background)
      */
     public function generateAi(Request $request): JsonResponse
     {
@@ -242,32 +251,29 @@ class NewsController extends Controller
             'prompt' => 'nullable|string',
         ]);
 
-        Log::info('Gemini API Request: ' . json_encode($validated));
+        Log::info('Dispatching Gemini API Job: ' . json_encode($validated));
         try {
-            $geminiService = app(\App\Services\GeminiService::class);
-            
-            $articles = $geminiService->generateArticles($validated);
-            Log::info('Gemini API Articles: ' . json_encode($articles));
-
-            // Save to Database
+            // Save to Database as pending
             $generation = \App\Models\AiGeneration::create([
                 'user_id' => auth()->id(),
                 'category' => $validated['category'],
                 'prompt' => $validated['prompt'] ?? null,
-                'generated_content' => $articles,
-                'status' => 'draft'
+                'generated_content' => null,
+                'status' => 'pending'
             ]);
 
+            \App\Jobs\GenerateAiNewsJob::dispatch($generation->id, $validated);
+
             return response()->json([
-                'data' => $articles,
+                'data' => [], // Background job will populate this
                 'generation_id' => $generation->id,
-                'message' => 'Articles generated and saved to history successfully'
+                'message' => 'AI is generating articles in the background. Please check history later.'
             ]);
         } catch (\Exception $e) {
-            Log::error('Gemini API Error: ' . $e->getMessage());
+            Log::error('Gemini API Dispatch Error: ' . $e->getMessage());
             return response()->json([
                 'data' => [],
-                'message' => 'Failed to generate articles: ' . $e->getMessage()
+                'message' => 'Failed to initialize AI generation: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -289,38 +295,30 @@ class NewsController extends Controller
 
         $article = $validated['article'];
         $generationId = $validated['generation_id'];
-
-        // Convert AI temporary image URL to permanent Cloudinary URL
-        if (!empty($article['thumbnail'])) {
-            try {
-                $imageService = new ImageService();
-                $article['thumbnail'] = $imageService->uploadFromUrl(
-                    $article['thumbnail'],
-                    'ai_generated'
-                );
-                Log::info('AI image uploaded to Cloudinary: ' . $article['thumbnail']);
-            } catch (\Exception $e) {
-                Log::error('Failed to upload AI image: ' . $e->getMessage());
-                // Continue without image if upload fails
-                $article['thumbnail'] = null;
-            }
-        }
+        
+        $tempUrl = $article['thumbnail'] ?? null;
+        $article['thumbnail'] = substr($tempUrl, 0, 500); // Temporary thumbnail
 
         // Generate slug from title
         $article['slug'] = \Str::slug($article['title']) . '-' . time();
         $article['published_at'] = now();
         $article['is_premium'] = $article['is_premium'] ?? false;
 
-        // Create news article
+        // Create news article (with temp image if available)
         $news = News::create($article);
 
         // Mark AI generation as 'saved'
         AiGeneration::where('id', $generationId)->update(['status' => 'saved']);
 
+        // Dispatch background job for image upload
+        if (!empty($tempUrl) && filter_var($tempUrl, FILTER_VALIDATE_URL)) {
+            \App\Jobs\UploadCloudinaryImageJob::dispatch($news->id, $tempUrl);
+        }
+
         $news->load(['category', 'user']);
 
         return response()->json([
-            'message' => 'AI article published successfully',
+            'message' => 'AI article published successfully. Image optimization running in background.',
             'data' => $news,
         ], 201);
     }

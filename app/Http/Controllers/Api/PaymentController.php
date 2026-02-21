@@ -51,8 +51,8 @@ class PaymentController extends Controller
                     'quantity' => 1,
                 ]],
                 'mode' => 'payment',
-                'success_url' => env('FRONTEND_URL', 'http://localhost:8080') . '/payment-success?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => env('FRONTEND_URL', 'http://localhost:8080') . '/checkout/' . $plan->id . '?canceled=true',
+                'success_url' => env('FRONTEND_URL', 'https://monochrome-news.vercel.app') . '/payment-success?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => env('FRONTEND_URL', 'https://monochrome-news.vercel.app') . '/checkout/' . $plan->id . '?canceled=true',
                 'metadata' => [
                     'subscription_id' => $subscription->id,
                     'plan_id' => $plan->id,

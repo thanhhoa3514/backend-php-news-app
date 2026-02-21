@@ -10,9 +10,8 @@ class GeminiService
     private string $apiKey;
 private string $baseUrl = 'https://generativelanguage.googleapis.com/v1/models/';
     private array $models = [
-       'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+        'gemini-2.5-flash',
+        'gemini-3-pro-preview'
     ];
 
     public function __construct()

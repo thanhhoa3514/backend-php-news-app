@@ -22,7 +22,7 @@ class AuthController extends Controller
         $this->otpService = $otpService;
     }
     /**
-     * Register a new user - Step 1: Store data and send OTP
+     * Register a new user - Direct registration without OTP for demo
      */
     public function register(Request $request): JsonResponse
     {
@@ -33,36 +33,29 @@ class AuthController extends Controller
             'avatar' => 'nullable|string|max:500',
         ]);
 
-        $email = $validated['email'];
-
-        // Hash password before storing
-        $registrationData = [
+        // Create user directly (OTP disabled for demo)
+        $user = User::create([
             'name' => $validated['name'],
-            'email' => $email,
+            'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'avatar' => $validated['avatar'] ?? null,
-        ];
+            'email_verified_at' => now(), // Auto-verify for demo
+        ]);
 
-        // Store registration data in Redis (5 minutes TTL)
-        $this->otpService->storeRegistrationData($email, $registrationData);
-
-        // Generate and send OTP
-        $otpResult = $this->otpService->generateAndSend($email);
-
-        if (!$otpResult['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $otpResult['message'],
-                'retry_after' => $otpResult['retry_after'] ?? null
-            ], 429);
+        // Assign default role
+        $userRole = Role::where('name', 'User')->first();
+        if ($userRole) {
+            $user->roles()->attach($userRole->id);
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Registration initiated. Please check your email for OTP verification.',
-            'email' => $email,
-            'otp_sent' => true,
-            'expires_in' => $otpResult['expires_in'] * 60 // Convert to seconds
+            'message' => 'Registration successful! You can now login.',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ]
         ], 201);
     }
 
@@ -151,22 +144,22 @@ class AuthController extends Controller
         $response = response()->json([
             'message' => 'Login successful',
             'user' => $user,
-            // 'token' => $token, // Do not return token in body
+            'token' => $token, // Return token in body for localStorage storage
             'token_type' => 'bearer',
             'expires_in' => $expiresIn
         ]);
 
-        // Always set httpOnly cookie
+        // Also set httpOnly cookie as backup (may not work with third-party cookie blocking)
         $response->cookie(
             'jwt_token',
             $token,
             $expiresIn / 60, // minutes
             '/',
             null,
-            app()->isProduction(), // secure (true in production, false in dev)
+            true, // secure (required for SameSite=none)
             true, // httpOnly
             false,
-            'lax' // SameSite: Lax is better for navigation between sites (like OAuth)
+            'none' // SameSite: none for cross-domain cookies
         );
 
         return $response;
@@ -184,17 +177,17 @@ class AuthController extends Controller
                 'message' => 'Logged out successfully'
             ]);
 
-            // Always clear cookie
+            // Always clear cookie with SameSite=none for cross-domain
             $response->cookie(
                 'jwt_token',
                 '',
                 -1, // expire immediately
                 '/',
                 null,
-                app()->isProduction(),
+                true, // secure (required for SameSite=none)
                 true,
                 false,
-                'lax'
+                'none' // SameSite: none for cross-domain cookies
             );
 
             return $response;
@@ -240,17 +233,17 @@ class AuthController extends Controller
                 'expires_in' => $expiresIn
             ]);
 
-            // Set new httpOnly cookie
+            // Set new httpOnly cookie with SameSite=none for cross-domain
             $response->cookie(
                 'jwt_token',
                 $token,
                 $expiresIn / 60, // minutes
                 '/',
                 null,
-                app()->isProduction(), // secure
+                true, // secure (required for SameSite=none)
                 true, // httpOnly
                 false,
-                'lax' // SameSite
+                'none' // SameSite: none for cross-domain cookies
             );
 
             return $response;
