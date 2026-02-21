@@ -15,9 +15,11 @@ class CategoryController extends Controller
      */
     public function index(): JsonResponse
     {
-        $categories = Category::withCount('news')
-            ->orderBy('name')
-            ->get();
+        $categories = \Illuminate\Support\Facades\Cache::remember('categories.all', 3600, function () {
+            return Category::withCount('news')
+                ->orderBy('name')
+                ->get();
+        });
 
         return response()->json($categories);
     }
@@ -28,9 +30,12 @@ class CategoryController extends Controller
     public function show(string $slug): JsonResponse
     {
         Log::info('Category slug: ' . $slug);
-        $category = Category::where('slug', $slug)
-            ->withCount('news')
-            ->firstOrFail();
+        
+        $category = \Illuminate\Support\Facades\Cache::remember('category.detail.' . $slug, 3600, function () use ($slug) {
+            return Category::where('slug', $slug)
+                ->withCount('news')
+                ->firstOrFail();
+        });
 
         return response()->json($category);
     }
