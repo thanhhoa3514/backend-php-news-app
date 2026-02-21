@@ -22,6 +22,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Register Observers
+        \App\Models\News::observe(\App\Observers\NewsObserver::class);
+        \App\Models\Category::observe(\App\Observers\CategoryObserver::class);
+
         // Define rate limiters
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
