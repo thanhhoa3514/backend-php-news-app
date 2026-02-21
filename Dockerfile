@@ -61,7 +61,7 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/sites-available/default
 
-# Tạo file cấu hình Supervisor để quản lý nginx và php-fpm
+# Tạo file cấu hình Supervisor để quản lý nginx, php-fpm và queue-worker
 RUN echo '[supervisord] \n\
 nodaemon=true \n\
 \n\
@@ -73,7 +73,17 @@ autorestart=true \n\
 [program:nginx] \n\
 command=/usr/sbin/nginx -g "daemon off;" \n\
 autostart=true \n\
-autorestart=true' > /etc/supervisor/conf.d/supervisord.conf
+autorestart=true \n\
+\n\
+[program:laravel-worker] \n\
+process_name=%(program_name)s_%(process_num)02d \n\
+command=php /var/www/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600 \n\
+autostart=true \n\
+autorestart=true \n\
+stopasgroup=true \n\
+killasgroup=true \n\
+user=root \n\
+numprocs=2' > /etc/supervisor/conf.d/supervisord.conf
 
 # Tạo script khởi động
 RUN echo '#!/bin/bash \n\
