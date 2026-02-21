@@ -12,8 +12,10 @@ class NewsObserver
      */
     private function clearCache(): void
     {
-        Cache::forget('news.published');
-        Cache::forget('categories.all'); // since news count might change
+        if (in_array(config('cache.default'), ['redis', 'memcached'])) {
+            Cache::tags(['news'])->flush();
+        }
+        Cache::forget('categories.all');
     }
 
     /**

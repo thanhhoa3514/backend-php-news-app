@@ -17,12 +17,13 @@ class NewsController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = $request->get('per_page', 10);
-        $categoryId = $request->get('category_id');
-        $isPremium = $request->get('is_premium');
-        $tagId = $request->get('tag_id');
-        
-        $cacheKey = 'news.index.' . md5(json_encode($request->all()));
+
+        +$cacheKey = 'news.index.' . md5(json_encode([
+   'category_id' => $categoryId,
+    'is_premium'  => $isPremium,
+    'tag_id'      => $tagId,
+    'per_page'    => $perPage,
+]));
 
         $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
             $query = News::with(['category', 'user', 'tags'])
@@ -45,6 +46,7 @@ class NewsController extends Controller
 
             return $query->paginate($perPage);
         };
+
 
         if (config('cache.default') === 'redis' || config('cache.default') === 'memcached') {
             $news = \Illuminate\Support\Facades\Cache::tags(['news'])->remember($cacheKey, 3600, $fetchData);
@@ -290,14 +292,22 @@ class NewsController extends Controller
             'article.content' => 'required|string',
             'article.category_id' => 'required|exists:categories,id',
             'article.user_id' => 'required|exists:users,id',
-            'article.thumbnail' => 'nullable|string',
+            'article.thumbnail' => 'nullable|url|max:2048',
         ]);
 
         $article = $validated['article'];
         $generationId = $validated['generation_id'];
         
         $tempUrl = $article['thumbnail'] ?? null;
-        $article['thumbnail'] = substr($tempUrl, 0, 500); // Temporary thumbnail
+
+        
+        if (!empty($tempUrl) && filter_var($tempUrl, FILTER_VALIDATE_URL)) {
+            $article['thumbnail'] = $tempUrl;
+        } else {
+            $article['thumbnail'] = null;
+            $tempUrl = null;
+        }
+
 
         // Generate slug from title
         $article['slug'] = \Str::slug($article['title']) . '-' . time();
