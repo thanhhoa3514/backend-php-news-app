@@ -106,7 +106,14 @@ class OtpServiceTest extends TestCase
             ->once()
             ->with('otp_attempts:'.$email)
             ->andReturn(1);
-
+        Redis::shouldReceive('exists')
+            ->once()
+            ->with('otp_attempts:'.$email)
+            ->andReturn(true);
+        Redis::shouldReceive('incr')
+            ->once()
+            ->with('otp_attempts:'.$email)
+            ->andReturn(2);
         Redis::shouldReceive('setex')
             ->once()
             ->withArgs(function (string $key, int $ttl, string $otp) use ($email): bool {
@@ -116,40 +123,26 @@ class OtpServiceTest extends TestCase
             })
             ->andReturnTrue();
 
-        Redis::shouldReceive('exists')
-            ->once()
-            ->with('otp_attempts:'.$email)
-            ->andReturn(false);
-
-        Redis::shouldReceive('setex')
-            ->once()
-            ->with('otp_attempts:'.$email, 3600, 1)
-            ->andReturnTrue();
-
         Mail::shouldReceive('to')
             ->once()
             ->with($email)
             ->andReturnSelf();
-
         Mail::shouldReceive('send')
             ->once()
             ->with(Mockery::type(OtpMail::class))
             ->andThrow(new \RuntimeException('SMTP down'));
-
         Redis::shouldReceive('del')
             ->once()
             ->with('otp:'.$email)
             ->andReturn(1);
-
         Redis::shouldReceive('exists')
             ->once()
             ->with('otp_attempts:'.$email)
             ->andReturn(true);
-
         Redis::shouldReceive('decr')
             ->once()
             ->with('otp_attempts:'.$email)
-            ->andReturn(0);
+            ->andReturn(1);
 
         $service = new OtpService();
         $result = $service->generateAndSend($email);
