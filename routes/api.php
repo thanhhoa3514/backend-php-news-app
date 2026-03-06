@@ -73,6 +73,7 @@ Route::prefix('v1')->group(function () {
         
         Route::middleware('auth:api')->group(function () {
             Route::get('/all', [NewsController::class, 'all']);
+            Route::get('/editor/stats', [NewsController::class, 'editorStats']);
             Route::post('/', [NewsController::class, 'store']);
             Route::post('/ai-generate', [NewsController::class, 'generateAi']);
             Route::post('/publish-ai', [NewsController::class, 'publishAiArticle']);

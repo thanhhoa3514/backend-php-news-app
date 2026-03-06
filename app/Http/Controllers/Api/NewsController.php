@@ -17,13 +17,17 @@ class NewsController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $categoryId = $request->get('category_id');
+        $isPremium = $request->get('is_premium');
+        $tagId =    $request->get('tag_id');
+        $perPage = $request->get('per_page', 10);
 
-        +$cacheKey = 'news.index.' . md5(json_encode([
-   'category_id' => $categoryId,
-    'is_premium'  => $isPremium,
-    'tag_id'      => $tagId,
-    'per_page'    => $perPage,
-]));
+        $cacheKey = 'news.index.' . md5(json_encode([
+            'category_id' => $categoryId,
+            'is_premium'  => $isPremium,
+            'tag_id'      => $tagId,
+            'per_page'    => $perPage,
+        ]));
 
         $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
             $query = News::with(['category', 'user', 'tags'])
@@ -331,6 +335,42 @@ class NewsController extends Controller
             'message' => 'AI article published successfully. Image optimization running in background.',
             'data' => $news,
         ], 201);
+    }
+
+    /**
+     * Get statistics for the authenticated editor
+     */
+    public function editorStats(Request $request): JsonResponse
+    {
+        $userId = auth()->id();
+
+        // Count total articles created by this user
+        $myArticles = News::where('user_id', $userId)->count();
+
+        // Count published articles
+        $published = News::where('user_id', $userId)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->count();
+
+        // Count drafts (unpublished or future published dates)
+        $drafts = News::where('user_id', $userId)
+            ->where(function ($query) {
+                $query->whereNull('published_at')
+                      ->orWhere('published_at', '>', now());
+            })
+            ->count();
+
+        // Currently, there's no views column in the news table.
+        // We set totalViews to 0 as a placeholder, similar to AdminDashboard.
+        $totalViews = 0;
+
+        return response()->json([
+            'myArticles' => $myArticles,
+            'published' => $published,
+            'drafts' => $drafts,
+            'totalViews' => $totalViews,
+        ]);
     }
 }
 
