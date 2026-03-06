@@ -20,13 +20,15 @@ class NewsController extends Controller
         $categoryId = $request->get('category_id');
         $isPremium = $request->get('is_premium');
         $tagId =    $request->get('tag_id');
-        $perPage = $request->get('per_page', 10);
+        $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
+        $page = max((int) $request->get('page', 1), 1);
 
         $cacheKey = 'news.index.' . md5(json_encode([
             'category_id' => $categoryId,
             'is_premium'  => $isPremium,
             'tag_id'      => $tagId,
             'per_page'    => $perPage,
+            'page'        => $page,
         ]));
 
         $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
