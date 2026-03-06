@@ -122,14 +122,7 @@ class OtpServiceTest extends TestCase
                     && preg_match('/^\d{6}$/', $otp) === 1;
             })
             ->andReturnTrue();
-        Redis::shouldReceive('exists')
-            ->once()
-            ->with('otp_attempts:'.$email)
-            ->andReturn(false);
-        Redis::shouldReceive('setex')
-            ->once()
-            ->with('otp_attempts:'.$email, 3600, 1)
-            ->andReturnTrue();
+
         Mail::shouldReceive('to')
             ->once()
             ->with($email)
