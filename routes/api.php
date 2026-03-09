@@ -32,6 +32,18 @@ use App\Http\Controllers\Api\WebhookController;
 // Using withoutMiddleware to bypass CSRF (important for Stripe webhooks)
 Route::post('/webhook/stripe', [WebhookController::class, 'handleWebhook']);
 
+// ============================================================
+// Demo routes for teacher check (public, no auth, no v1 prefix)
+// BASE_API/users      -> all users
+// BASE_API/users/{id} -> user by id
+// ============================================================
+Route::get('/users', [UserController::class, 'index']);
+Route::get('/users/{id}', [UserController::class, 'show']);
+Route::post('/users', [UserController::class, 'store']);
+Route::put('/users/{id}', [UserController::class, 'update']);
+Route::patch('/users/{id}', [UserController::class, 'update']);
+Route::delete('/users/{id}', [UserController::class, 'destroy']);
+
 // API Version 1
 Route::prefix('v1')->group(function () {
     
