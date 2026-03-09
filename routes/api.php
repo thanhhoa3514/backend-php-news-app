@@ -33,16 +33,9 @@ use App\Http\Controllers\Api\WebhookController;
 Route::post('/webhook/stripe', [WebhookController::class, 'handleWebhook']);
 
 // ============================================================
-// Demo routes for teacher check (public, no auth, no v1 prefix)
-// BASE_API/users      -> all users
-// BASE_API/users/{id} -> user by id
+// Note: Demo routes for teacher check (public, no auth, no v1 prefix)
+// Check bootstrap/app.php explicitly for BASE_API/users setup!
 // ============================================================
-Route::get('/users', [UserController::class, 'index']);
-Route::get('/users/{id}', [UserController::class, 'show']);
-Route::post('/users', [UserController::class, 'store']);
-Route::put('/users/{id}', [UserController::class, 'update']);
-Route::patch('/users/{id}', [UserController::class, 'update']);
-Route::delete('/users/{id}', [UserController::class, 'destroy']);
 
 // API Version 1
 Route::prefix('v1')->group(function () {
