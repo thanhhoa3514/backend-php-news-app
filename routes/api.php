@@ -74,7 +74,6 @@ Route::prefix('v1')->group(function () {
     Route::prefix('news')->group(function () {
         Route::get('/', [NewsController::class, 'index']);
         Route::get('/search', [NewsController::class, 'search']);
-        Route::get('/{id}', [NewsController::class, 'show']);
         
         Route::middleware('auth:api')->group(function () {
             Route::get('/all', [NewsController::class, 'all']);
@@ -86,6 +85,8 @@ Route::prefix('v1')->group(function () {
             Route::patch('/{id}', [NewsController::class, 'update']);
             Route::delete('/{id}', [NewsController::class, 'destroy']);
         });
+
+        Route::get('/{id}', [NewsController::class, 'show'])->whereNumber('id');
     });
 
     // Category routes (public read, protected write)
@@ -183,4 +184,3 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/save', [AiGenerationController::class, 'markAsSaved']);
     });
 });
-

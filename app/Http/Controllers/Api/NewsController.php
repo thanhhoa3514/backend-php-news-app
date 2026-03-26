@@ -6,10 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\News;
 use App\Models\AiGeneration;
+use App\Models\User;
 use App\Services\ImageService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 
 class NewsController extends Controller
 {
@@ -26,6 +31,12 @@ class NewsController extends Controller
         $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
         $page = max((int) $request->get('page', 1), 1);
 
+        if (filter_var($isPremium, FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json([
+                'message' => 'Premium listings require an entitled account and are not available on the public feed.',
+            ], 403);
+        }
+
         $cacheKey = 'news.index.' . md5(json_encode([
             'category_id' => $categoryId,
             'is_premium'  => $isPremium,
@@ -34,17 +45,14 @@ class NewsController extends Controller
             'page'        => $page,
         ]));
 
-        $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
+        $fetchData = function () use ($categoryId, $tagId, $perPage) {
             $query = News::with(['category', 'user', 'tags'])
                 ->published()
+                ->free()
                 ->orderBy('published_at', 'desc');
 
             if ($categoryId) {
                 $query->where('category_id', $categoryId);
-            }
-
-            if ($isPremium !== null) {
-                $query->where('is_premium', filter_var($isPremium, FILTER_VALIDATE_BOOLEAN));
             }
 
             if ($tagId) {
@@ -66,9 +74,6 @@ class NewsController extends Controller
         return response()->json($news);
     }
 
-    /**
-     * Display all news (for admin)
-     */
     /**
      * Display all news (for admin)
      */
@@ -122,6 +127,12 @@ class NewsController extends Controller
         $query = $request->get('q', '');
         $perPage = $request->get('per_page', 10);
 
+        if (filter_var($request->get('is_premium'), FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json([
+                'message' => 'Premium search results require an entitled account and are not exposed on the public search endpoint.'
+            ], 403);
+        }
+
         if (empty($query)) {
             return response()->json([
                 'data' => [],
@@ -131,6 +142,7 @@ class NewsController extends Controller
 
         $news = News::with(['category', 'user', 'tags'])
             ->published()
+            ->free()
             ->search($query)
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
@@ -141,9 +153,20 @@ class NewsController extends Controller
     /**
      * Display the specified news
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
         $news = News::with(['category', 'user', 'tags'])->findOrFail($id);
+        $user = $this->resolveOptionalUser($request);
+
+        if (!$news->isPublished() && !$this->canPreviewArticle($news, $user)) {
+            abort(404);
+        }
+
+        if ($news->isPremium() && !$this->canReadPremiumArticle($news, $user)) {
+            return response()->json([
+                'message' => 'Premium subscription required to access this article.',
+            ], 403);
+        }
 
         return response()->json($news);
     }
@@ -403,5 +426,60 @@ class NewsController extends Controller
             'drafts' => $drafts,
             'totalViews' => $totalViews,
         ]);
+    }
+
+    private function canPreviewArticle(News $news, ?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->isAdmin()
+            || $user->hasRole('editor')
+            || (int) $user->id === (int) $news->user_id;
+    }
+
+    private function canReadPremiumArticle(News $news, ?User $user): bool
+    {
+        if (!$news->isPremium()) {
+            return true;
+        }
+
+        if (!$user) {
+            return false;
+        }
+
+        return $user->canAccessPremium() || $this->canPreviewArticle($news, $user);
+    }
+
+    private function resolveOptionalUser(Request $request): ?User
+    {
+        $user = auth()->user();
+
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        try {
+            $token = JWTAuth::getToken();
+
+            if (!$token && $request->hasCookie('jwt_token')) {
+                $token = $request->cookie('jwt_token');
+
+                if ($token) {
+                    JWTAuth::setToken($token);
+                }
+            }
+
+            if (!$token) {
+                return null;
+            }
+
+            $resolvedUser = JWTAuth::parseToken()->authenticate();
+
+            return $resolvedUser instanceof User ? $resolvedUser : null;
+        } catch (TokenExpiredException | TokenInvalidException | JWTException) {
+            return null;
+        }
     }
 }

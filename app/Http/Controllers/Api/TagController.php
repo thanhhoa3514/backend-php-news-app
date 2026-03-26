@@ -24,7 +24,11 @@ class TagController extends Controller
         $search = $request->get('q');
         $all = $request->get('all'); // If true, return all tags without pagination
 
-        $query = Tag::withCount('news');
+        $query = Tag::withCount([
+            'news as news_count' => function ($newsQuery) {
+                $newsQuery->published()->free();
+            }
+        ]);
 
         if ($search) {
             $query->where('name', 'like', "%{$search}%")
@@ -70,9 +74,17 @@ class TagController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id): JsonResponse
+    public function show(string $idOrSlug): JsonResponse
     {
-        $tag = Tag::withCount('news')->findOrFail($id);
+        $tag = Tag::withCount([
+            'news as news_count' => function ($newsQuery) {
+                $newsQuery->published()->free();
+            }
+        ])
+            ->where('id', $idOrSlug)
+            ->orWhere('slug', $idOrSlug)
+            ->firstOrFail();
+
         return response()->json($tag);
     }
 
@@ -90,8 +102,8 @@ class TagController extends Controller
 
         $news = $tag->news()
             ->with(['category', 'user', 'tags'])
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now())
+            ->published()
+            ->free()
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 

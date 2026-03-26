@@ -19,7 +19,11 @@ class CategoryController extends Controller
     public function index(): JsonResponse
     {
         $categories = \Illuminate\Support\Facades\Cache::remember('categories.all', 3600, function () {
-            return Category::withCount('news')
+            return Category::withCount([
+                'news as news_count' => function ($query) {
+                    $query->published()->free();
+                }
+            ])
                 ->orderBy('name')
                 ->get();
         });
@@ -36,7 +40,11 @@ class CategoryController extends Controller
         
         $category = \Illuminate\Support\Facades\Cache::remember('category.detail.' . $slug, 3600, function () use ($slug) {
             return Category::where('slug', $slug)
-                ->withCount('news')
+                ->withCount([
+                    'news as news_count' => function ($query) {
+                        $query->published()->free();
+                    }
+                ])
                 ->firstOrFail();
         });
 
@@ -56,6 +64,7 @@ class CategoryController extends Controller
         $news = $category->news()
             ->with(['category', 'user', 'tags'])
             ->published()
+            ->free()
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
