@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,8 @@ use Illuminate\Support\Str;
 
 class PlanController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of plans
      */
@@ -43,6 +46,7 @@ class PlanController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureAdmin();
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:plans,slug',
@@ -71,6 +75,7 @@ class PlanController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $plan = Plan::findOrFail($id);
 
         $validated = $request->validate([
@@ -97,6 +102,7 @@ class PlanController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $plan = Plan::findOrFail($id);
         
         if ($plan->subscriptions()->where('status', 'active')->count() > 0) {
@@ -112,4 +118,3 @@ class PlanController extends Controller
         ]);
     }
 }
-

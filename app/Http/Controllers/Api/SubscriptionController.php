@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Subscription;
 use App\Models\Plan;
 use Illuminate\Http\Request;
@@ -10,17 +11,25 @@ use Illuminate\Http\JsonResponse;
 
 class SubscriptionController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of subscriptions
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $this->currentUser();
         $perPage = $request->get('per_page', 15);
         $status = $request->get('status');
         $userId = $request->get('user_id');
         $planId = $request->get('plan_id');
 
         $query = Subscription::with(['user', 'plan']);
+
+        if (!$user->isAdmin()) {
+            $query->where('user_id', $user->id);
+            $userId = $user->id;
+        }
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
@@ -44,7 +53,9 @@ class SubscriptionController extends Controller
      */
     public function show(string $id): JsonResponse
     {
+        $user = $this->currentUser();
         $subscription = Subscription::with(['user', 'plan'])->findOrFail($id);
+        $this->ensureOwnerOrAdmin($subscription->user_id, $user, 'You can only view your own subscriptions.');
 
         return response()->json($subscription);
     }
@@ -54,6 +65,7 @@ class SubscriptionController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $this->ensureAdmin();
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'plan_id' => 'required|exists:plans,id',
@@ -82,6 +94,7 @@ class SubscriptionController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $subscription = Subscription::findOrFail($id);
 
         $validated = $request->validate([
@@ -103,7 +116,9 @@ class SubscriptionController extends Controller
      */
     public function cancel(string $id): JsonResponse
     {
+        $user = $this->currentUser();
         $subscription = Subscription::findOrFail($id);
+        $this->ensureOwnerOrAdmin($subscription->user_id, $user, 'You can only cancel your own subscriptions.');
 
         if ($subscription->status === 'cancelled') {
             return response()->json([
@@ -124,6 +139,7 @@ class SubscriptionController extends Controller
      */
     public function activate(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $subscription = Subscription::findOrFail($id);
 
         if ($subscription->status === 'active') {
@@ -151,6 +167,7 @@ class SubscriptionController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $subscription = Subscription::findOrFail($id);
         $subscription->delete();
 
@@ -159,4 +176,3 @@ class SubscriptionController extends Controller
         ]);
     }
 }
-

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\News;
 use App\Models\AiGeneration;
 use App\Services\ImageService;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 class NewsController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of published news
      */
@@ -71,6 +74,7 @@ class NewsController extends Controller
      */
     public function all(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $perPage = $request->get('per_page', 10);
         $categoryId = $request->get('category_id');
         $status = $request->get('status');
@@ -78,6 +82,10 @@ class NewsController extends Controller
         
         $query = News::with(['category', 'user', 'tags'])
             ->orderBy('created_at', 'desc');
+
+        if (!$user->isAdmin()) {
+            $query->where('user_id', $user->id);
+        }
 
         if ($categoryId && $categoryId !== 'all') {
             $query->where('category_id', $categoryId);
@@ -145,6 +153,7 @@ class NewsController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         Log::info('News store request: ' . json_encode($request->all()));
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -152,12 +161,16 @@ class NewsController extends Controller
             'content' => 'required|string',
             'thumbnail' => 'nullable|image|max:5120', // 5MB max for file uploads
             'category_id' => 'required|exists:categories,id',
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'nullable|exists:users,id',
             'published_at' => 'nullable|date',
             'is_premium' => 'nullable|boolean',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
         ]);
+
+        $validated['user_id'] = $user->isAdmin()
+            ? ($validated['user_id'] ?? $user->id)
+            : $user->id;
 
         // Handle file upload to Cloudinary
         if ($request->hasFile('thumbnail')) {
@@ -188,7 +201,9 @@ class NewsController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $news = News::findOrFail($id);
+        $this->ensureOwnerOrAdmin($news->user_id, $user, 'You can only modify your own articles.');
 
         // Check if thumbnail is a file or string
         $thumbnailRule = 'nullable|string|max:500';
@@ -202,12 +217,16 @@ class NewsController extends Controller
             'content' => 'sometimes|required|string',
             'thumbnail' => $thumbnailRule,
             'category_id' => 'sometimes|required|exists:categories,id',
-            'user_id' => 'sometimes|required|exists:users,id',
+            'user_id' => 'nullable|exists:users,id',
             'published_at' => 'nullable|date',
             'is_premium' => 'nullable|boolean',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
         ]);
+
+        if (!$user->isAdmin()) {
+            $validated['user_id'] = $news->user_id;
+        }
 
         // Handle file upload to Cloudinary
         if ($request->hasFile('thumbnail')) {
@@ -237,7 +256,9 @@ class NewsController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $news = News::findOrFail($id);
+        $this->ensureOwnerOrAdmin($news->user_id, $user, 'You can only delete your own articles.');
         $news->delete();
 
         return response()->json([
@@ -250,6 +271,7 @@ class NewsController extends Controller
      */
     public function generateAi(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'category' => 'required|string',
             'count' => 'required|integer|min:1|max:5',
@@ -291,18 +313,25 @@ class NewsController extends Controller
      */
     public function publishAiArticle(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'generation_id' => 'required|exists:ai_generations,id',
             'article' => 'required|array',
             'article.title' => 'required|string',
             'article.content' => 'required|string',
             'article.category_id' => 'required|exists:categories,id',
-            'article.user_id' => 'required|exists:users,id',
+            'article.user_id' => 'nullable|exists:users,id',
             'article.thumbnail' => 'nullable|url|max:2048',
         ]);
 
         $article = $validated['article'];
         $generationId = $validated['generation_id'];
+        $generation = AiGeneration::findOrFail($generationId);
+        $this->ensureOwnerOrAdmin($generation->user_id, $user, 'You can only publish your own AI generations.');
+
+        $article['user_id'] = $user->isAdmin()
+            ? ($article['user_id'] ?? $user->id)
+            : $user->id;
         
         $tempUrl = $article['thumbnail'] ?? null;
 
@@ -344,6 +373,7 @@ class NewsController extends Controller
      */
     public function editorStats(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $userId = auth()->id();
 
         // Count total articles created by this user
@@ -375,4 +405,3 @@ class NewsController extends Controller
         ]);
     }
 }
-

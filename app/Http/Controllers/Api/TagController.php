@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class TagController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of the resource.
      */
@@ -45,6 +48,7 @@ class TagController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         Log::info($request->all());
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:tags,name',
@@ -102,6 +106,7 @@ class TagController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         Log::info($request->all());
         $tag = Tag::findOrFail($id);
 
@@ -127,6 +132,7 @@ class TagController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $tag = Tag::findOrFail($id);
         
         // Detach from all news first (although cascade delete on foreign key might handle this, explicit is safe)

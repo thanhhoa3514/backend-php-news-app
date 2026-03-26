@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -10,6 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 class CategoryController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of categories
      */
@@ -64,6 +67,7 @@ class CategoryController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:categories,slug',
@@ -84,6 +88,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $category = Category::findOrFail($id);
 
         $validated = $request->validate([
@@ -106,6 +111,7 @@ class CategoryController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $category = Category::findOrFail($id);
         
         // Check if category has news
@@ -122,4 +128,3 @@ class CategoryController extends Controller
         ]);
     }
 }
-

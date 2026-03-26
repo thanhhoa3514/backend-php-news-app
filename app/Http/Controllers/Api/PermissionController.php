@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Permission;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -10,11 +11,14 @@ use Illuminate\Support\Str;
 
 class PermissionController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of permissions
      */
     public function index(): JsonResponse
     {
+        $this->ensureAdmin();
         $permissions = Permission::with('roles')->orderBy('name')->get();
 
         return response()->json($permissions);
@@ -25,6 +29,7 @@ class PermissionController extends Controller
      */
     public function show(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $permission = Permission::with('roles')->findOrFail($id);
 
         return response()->json($permission);
@@ -35,6 +40,7 @@ class PermissionController extends Controller
      */
     public function byRole(string $roleId): JsonResponse
     {
+        $this->ensureAdmin();
         $permissions = Permission::whereHas('roles', function ($query) use ($roleId) {
             $query->where('roles.id', $roleId);
         })->get();
@@ -47,6 +53,7 @@ class PermissionController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureAdmin();
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:permissions,slug',
@@ -78,6 +85,7 @@ class PermissionController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $permission = Permission::findOrFail($id);
 
         $validated = $request->validate([
@@ -111,6 +119,7 @@ class PermissionController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $permission = Permission::findOrFail($id);
         $permission->delete();
 
@@ -119,4 +128,3 @@ class PermissionController extends Controller
         ]);
     }
 }
-
