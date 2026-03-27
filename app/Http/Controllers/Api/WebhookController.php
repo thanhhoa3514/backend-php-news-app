@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Plan;
 use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -36,9 +37,17 @@ class WebhookController extends Controller
                 if ($subscriptionId && $session->payment_status === 'paid') {
                     $subscription = Subscription::find($subscriptionId);
                     if ($subscription) {
+                        $plan = Plan::find($subscription->plan_id);
+                        $startDate = now();
+                        $endDate = $plan
+                            ? (clone $startDate)->addDays($plan->duration_days)
+                            : $subscription->end_date;
+
                         $subscription->update([
                             'status' => 'active',
                             'transaction_id' => $session->id,
+                            'start_date' => $startDate,
+                            'end_date' => $endDate,
                         ]);
                         Log::info("Subscription activated via Checkout: ID=" . $subscriptionId);
                     }
