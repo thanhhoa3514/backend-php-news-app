@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\WebhookController;
 // Stripe Webhook - MUST be outside v1 prefix and without auth
 // Using withoutMiddleware to bypass CSRF (important for Stripe webhooks)
 Route::post('/webhook/stripe', [WebhookController::class, 'handleWebhook']);
+Route::post('/webhook/sepay', [WebhookController::class, 'handleSePayWebhook']);
 
 // ============================================================
 // Note: Demo routes for teacher check (public, no auth, no v1 prefix)
