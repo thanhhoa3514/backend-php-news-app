@@ -1,57 +1,63 @@
 # Monochrome News Flash - Laravel Backend API
 
-Backend API cho ứng dụng tin tức Monochrome News Flash, được xây dựng với Laravel 11 và MySQL.
+This repository contains the Laravel 11 backend API for the Monochrome News Flash application. It provides authentication, news management, categories, tags, subscriptions, payments, AI-assisted article generation, and role-based access control.
 
-## Tính năng
+## Features
 
-- RESTful API cho quản lý tin tức
-- Quản lý danh mục tin tức
-- Quản lý người dùng và phân quyền
-- Hệ thống permissions dựa trên roles
-- CORS được cấu hình sẵn cho ReactJS/Next.js
-- Dữ liệu mẫu hoàn chỉnh (Seeded mock data)
+- RESTful API for news management
+- Category and tag management
+- JWT-based authentication
+- User, role, and permission management
+- Subscription and Stripe checkout support
+- AI article generation endpoints
+- CORS configuration for React / Next.js clients
+- Seeded demo data for local testing
 
-## Yêu cầu hệ thống (Prerequisites)
+## Prerequisites
 
-- PHP >= 8.1
+- PHP 8.1 or higher
 - Composer
 - MySQL
-- Laragon / XAMPP / MAMP (Recommended cho thiết lập local)
+- Laragon, XAMPP, or MAMP for local PHP/MySQL setup (recommended)
 
----
+## Automated Setup
 
-## 🚀 Cài đặt tự động (Automated Setup)
+The project includes setup scripts for Windows and Linux/macOS. These scripts copy `.env`, install Composer dependencies, and generate the Laravel application key.
 
-Để giúp quá trình cài đặt nhanh chóng và dễ dàng nhất, dự án cung cấp các script cài đặt tự động cho cả Windows và Linux/macOS. Các script này sẽ tự động copy file `.env`, cài đặt các dependencies của Composer, và generate Application Key.
+### Windows (PowerShell)
 
-### 🪟 Dành cho Windows (PowerShell)
+1. Open PowerShell or the VS Code terminal.
+2. Change into the backend project directory.
+3. Run:
 
-1. Mở PowerShell (hoặc Terminal trong VS Code).
-2. Trỏ đường dẫn vào thư mục `backend`.
-3. Chạy script cài đặt:
-   ```powershell
-   .\setup.ps1
-   ```
-*(Lưu ý: Nếu bạn gặp lỗi Execution Policy, hãy chạy lệnh `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` trước khi chạy script).*
+```powershell
+.\setup.ps1
+```
 
-### 🐧 Dành cho Linux / macOS (Bash)
+If you hit an execution policy error, run this first:
 
-1. Mở Terminal.
-2. Trỏ đường dẫn tới thư mục `backend`.
-3. Cấp quyền thực thi và chạy script:
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
 
----
+### Linux / macOS (Bash)
 
-## ⚙️ Cấu hình Database (Database Configuration)
+1. Open a terminal.
+2. Change into the backend project directory.
+3. Make the script executable and run it:
 
-Sau khi chạy script tự động, bạn cần cấu hình database và chạy migrations để khởi tạo dữ liệu.
+```bash
+chmod +x setup.sh
+./setup.sh
+```
 
-### 1. Cập nhật `.env`
-Mở file `.env` ở thư mục gốc của backend và điền thông tin MySQL của bạn:
+## Database Configuration
+
+After the setup script finishes, configure MySQL and run migrations.
+
+### 1. Update `.env`
+
+Open `.env` in the backend root and fill in your MySQL settings:
 
 ```env
 DB_CONNECTION=mysql
@@ -59,41 +65,51 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=monochrome_news
 DB_USERNAME=root
-DB_PASSWORD=          # Để trống nếu bạn dùng XAMPP/Laragon mặc định
+DB_PASSWORD=
 ```
 
-### 2. Tạo Database trống
-Truy cập MySQL (qua HeidiSQL, phpMyAdmin, hoặc CLI) và chạy lệnh tạo database:
+Leave `DB_PASSWORD` empty if you are using a default XAMPP or Laragon setup.
+
+### 2. Create the Database
+
+Create an empty database in MySQL:
+
 ```sql
 CREATE DATABASE monochrome_news CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 3. Migrates và Seeders
-Chạy lệnh sau để tạo các bảng và chèn dữ liệu mẫu (Tin tức, User, Danh mục):
+### 3. Run Migrations and Seeders
+
+Run the following command to create the schema and seed demo data:
+
 ```bash
 php artisan migrate:fresh --seed
 ```
 
----
+## Run the Server
 
-## 🏃 Khởi động Server
-
-Khởi động Laravel Server cho môi trường phát triển:
+Start the Laravel development server:
 
 ```bash
 php artisan serve
 ```
 
-API sẽ chạy tại: `http://localhost:8000`
+The API will be available at:
 
-### Kiểm tra kết nối (Verification)
-
-Mở browser hoặc Postman và truy cập:
+```text
+http://localhost:8000
 ```
+
+## Verify the API
+
+Open your browser or Postman and request:
+
+```text
 http://localhost:8000/api/health
 ```
 
-Kết quả mong đợi:
+Expected response:
+
 ```json
 {
   "status": "ok",
@@ -102,45 +118,45 @@ Kết quả mong đợi:
 }
 ```
 
----
-
-## 📚 Tài liệu bổ sung (Documentation Index)
-
-Hệ thống có các tài liệu chi tiết cho từng cấu phần khác nhau. Vui lòng tham khảo:
-
-- [`DATABASE_STRUCTURE.md`](DATABASE_STRUCTURE.md) - Cấu trúc chi tiết của Database
-- [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md) - Danh sách các API Endpoints
-- [`SECURITY_GUIDE.md`](SECURITY_GUIDE.md) - Hướng dẫn Bảo mật và Phân quyền
-- [`FRONTEND_INTEGRATION.md`](FRONTEND_INTEGRATION.md) - Hướng dẫn tích hợp React/Next.js
-- [`JWT_SETUP.md`](JWT_SETUP.md) - Thiết lập Authentication bằng JWT
-
-##  Các Lệnh Hữu ích (Useful Commands)
+## Useful Commands
 
 ```bash
-# Xem danh sách các endpoint (Routes) hiện có
+# List all registered routes
 php artisan route:list
 
-# Xóa cache (rất cần thiết khi bạn sửa file .env hoặc bị lỗi CORS)
+# Clear caches after changing .env or config
 php artisan cache:clear
 php artisan config:clear
 php artisan route:clear
 
-# Reset lại toàn bộ Database và chèn lại dữ liệu mẫu
+# Rebuild the database with fresh demo data
 php artisan migrate:fresh --seed
 ```
 
-## Dữ liệu mẫu (Seeded Data)
+## Seeded Demo Data
 
-Hệ thống cung cấp sẵn dữ liệu mẫu phục vụ việc test:
-- **Tài khoản test chính**: `admin@example.com` (Role: Admin)
-- **Tài khoản Editor**: `marie.laurent@example.com` (Role: Editor)
-- **Mật khẩu chung cho mọi tài khoản**: `password`
-- **Danh mục (Categories)**: Tech, Économie, Environnement, Sport, Culture, Politique.
-- **Tin tức (News)**: Có sẵn 14 bài báo tin tức phân bổ vào các danh mục.
+The project includes demo data for development and testing:
 
-## Hỗ trợ (Support)
+- Primary admin account: `admin@example.com`
+- Editor account: `marie.laurent@example.com`
+- Shared password for seeded accounts: `password`
+- Seeded categories include Technology, Economy, Environment, Sports, Culture, and Politics
+- Seeded news articles are distributed across the available categories
 
-Nếu quá trình cài đặt gặp lỗi HTTP 500 hoặc truy vấn thất bại:
-1. Đảm bảo MySQL service đang chạy.
-2. Kiểm tra log hiển thị lỗi chính xác: xem file `storage/logs/laravel.log`.
-3. Nhớ clear cache sau mỗi lần đổi `.env` bằng `php artisan config:clear`.
+## Project Notes
+
+- Stripe webhook endpoint: `/api/webhook/stripe`
+- Authenticated API endpoints are grouped under `/api/v1`
+- A public demo users endpoint is still exposed separately for the teacher demo flow
+
+## Troubleshooting
+
+If you run into HTTP 500 errors or failed queries:
+
+1. Make sure your MySQL service is running.
+2. Check the Laravel log at `storage/logs/laravel.log`.
+3. Clear config cache after changing `.env`:
+
+```bash
+php artisan config:clear
+```
