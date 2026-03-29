@@ -203,9 +203,9 @@ class AuthController extends Controller
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
 
-            return response()->json([
+            return $this->clearAuthCookie(response()->json([
                 'message' => 'Token revoked successfully'
-            ]);
+            ]));
         } catch (JWTException $e) {
             return response()->json([
                 'message' => 'Could not revoke token'

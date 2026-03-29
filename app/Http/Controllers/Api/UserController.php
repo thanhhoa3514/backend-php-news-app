@@ -21,7 +21,7 @@ class UserController extends Controller
         $perPage = $request->get('per_page', 10);
 
         $users = User::query()
-            ->select(['id', 'name', 'email', 'created_at'])
+            ->select(['id', 'name', 'created_at'])
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
@@ -34,7 +34,7 @@ class UserController extends Controller
     public function publicShow(string $id): JsonResponse
     {
         $user = User::query()
-            ->select(['id', 'name', 'email', 'created_at'])
+            ->select(['id', 'name', 'created_at'])
             ->findOrFail($id);
 
         return response()->json($user);

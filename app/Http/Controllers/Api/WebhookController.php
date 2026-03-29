@@ -3,10 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Plan;
 use App\Models\Subscription;
-use App\Services\NotificationDispatchService;
 use App\Services\Payments\SePayPaymentService;
+use App\Services\SubscriptionActivationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -14,7 +13,7 @@ class WebhookController extends Controller
 {
     public function __construct(
         private readonly SePayPaymentService $sePayPaymentService,
-        private readonly NotificationDispatchService $notificationDispatchService,
+        private readonly SubscriptionActivationService $subscriptionActivationService,
     ) {
     }
 
@@ -22,7 +21,7 @@ class WebhookController extends Controller
     {
         $payload = $request->getContent();
         $sig_header = $request->header('Stripe-Signature');
-        $endpoint_secret = env('STRIPE_WEBHOOK_SECRET');
+        $endpoint_secret = config('services.stripe.webhook_secret');
 
         try {
             $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $endpoint_secret);
@@ -45,7 +44,7 @@ class WebhookController extends Controller
                 if ($subscriptionId && $session->payment_status === 'paid') {
                     $subscription = Subscription::with('plan')->find($subscriptionId);
                     if ($subscription) {
-                        $this->activateSubscription($subscription, $session->id);
+                        $this->subscriptionActivationService->activate($subscription, $session->id);
                         Log::info("Subscription activated via Checkout: ID=" . $subscriptionId);
                     }
                 }
@@ -135,7 +134,10 @@ class WebhookController extends Controller
         $providerTransactionId = $payload['referenceCode']
             ?? ($payload['id'] ?? $subscription->transaction_id);
 
-        $this->activateSubscription($subscription, is_scalar($providerTransactionId) ? (string) $providerTransactionId : null);
+        $this->subscriptionActivationService->activate(
+            $subscription,
+            is_scalar($providerTransactionId) ? (string) $providerTransactionId : null
+        );
 
         Log::info('Subscription activated via SePay webhook.', [
             'subscription_id' => $subscriptionId,
@@ -144,25 +146,5 @@ class WebhookController extends Controller
         ]);
 
         return response()->json(['success' => true]);
-    }
-
-    private function activateSubscription(Subscription $subscription, ?string $providerTransactionId = null): void
-    {
-        $subscription->loadMissing('plan');
-
-        $startDate = now();
-        $endDate = $subscription->plan
-            ? (clone $startDate)->addDays($subscription->plan->duration_days)
-            : $subscription->end_date;
-
-        $subscription->update([
-            'status' => 'active',
-            'transaction_id' => $providerTransactionId ?? $subscription->transaction_id,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-        ]);
-
-        $subscription->loadMissing(['user', 'plan']);
-        $this->notificationDispatchService->notifyPremiumActivated($subscription);
     }
 }

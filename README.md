@@ -1,6 +1,6 @@
 # Monochrome News Flash - Laravel Backend API
 
-This repository contains the Laravel 11 backend API for the Monochrome News Flash application. It provides authentication, news management, categories, tags, subscriptions, payments, AI-assisted article generation, and role-based access control.
+This repository contains the Laravel 12 backend API for the Monochrome News Flash application. It provides authentication, news management, categories, tags, subscriptions, payments, AI-assisted article generation, and role-based access control.
 
 ## Features
 
@@ -15,7 +15,7 @@ This repository contains the Laravel 11 backend API for the Monochrome News Flas
 
 ## Prerequisites
 
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - Composer
 - MySQL
 - Laragon, XAMPP, or MAMP for local PHP/MySQL setup (recommended)
