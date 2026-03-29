@@ -13,13 +13,14 @@ class StripePaymentService
      */
     public function createCheckout(Subscription $subscription, Plan $plan): array
     {
-        $secret = env('STRIPE_SECRET');
+        $secret = config('services.stripe.secret');
 
         if (!$secret) {
             throw new RuntimeException('STRIPE_SECRET is not configured.');
         }
 
         \Stripe\Stripe::setApiKey($secret);
+        $frontendUrl = rtrim((string) config('services.stripe.frontend_url', 'https://monochrome-news.vercel.app'), '/');
 
         $session = \Stripe\Checkout\Session::create([
             'payment_method_types' => ['card'],
@@ -35,8 +36,8 @@ class StripePaymentService
                 'quantity' => 1,
             ]],
             'mode' => 'payment',
-            'success_url' => rtrim(env('FRONTEND_URL', 'https://monochrome-news.vercel.app'), '/') . '/payment-success?provider=stripe&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => rtrim(env('FRONTEND_URL', 'https://monochrome-news.vercel.app'), '/') . '/checkout/' . $plan->id . '?canceled=true&provider=stripe',
+            'success_url' => $frontendUrl . '/payment-success?provider=stripe&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $frontendUrl . '/checkout/' . $plan->id . '?canceled=true&provider=stripe',
             'metadata' => [
                 'provider' => PaymentCheckoutService::PROVIDER_STRIPE,
                 'subscription_id' => $subscription->id,

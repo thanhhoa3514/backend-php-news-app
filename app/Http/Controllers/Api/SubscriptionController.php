@@ -6,12 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Subscription;
 use App\Models\Plan;
+use App\Services\SubscriptionActivationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class SubscriptionController extends Controller
 {
     use AuthorizesApiRequests;
+
+    public function __construct(
+        private readonly SubscriptionActivationService $subscriptionActivationService,
+    ) {
+    }
 
     /**
      * Display a listing of subscriptions
@@ -65,7 +71,7 @@ class SubscriptionController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $user = $this->ensureAdmin();
+        $this->ensureAdmin();
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'plan_id' => 'required|exists:plans,id',
@@ -96,6 +102,7 @@ class SubscriptionController extends Controller
     {
         $this->ensureAdmin();
         $subscription = Subscription::findOrFail($id);
+        $wasActive = $subscription->status === 'active';
 
         $validated = $request->validate([
             'status' => 'sometimes|required|in:active,expired,cancelled,pending',
@@ -105,8 +112,21 @@ class SubscriptionController extends Controller
             'transaction_id' => 'nullable|string|max:255',
         ]);
 
+        $shouldActivate = !$wasActive
+            && ($validated['status'] ?? null) === 'active';
+        $providerTransactionId = $validated['transaction_id'] ?? null;
+
+        if ($shouldActivate) {
+            unset($validated['status'], $validated['start_date'], $validated['end_date']);
+        }
+
         $subscription->update($validated);
-        $subscription->load(['user', 'plan']);
+
+        if ($shouldActivate) {
+            $subscription = $this->subscriptionActivationService->activate($subscription, $providerTransactionId);
+        } else {
+            $subscription->load(['user', 'plan']);
+        }
 
         return response()->json($subscription);
     }
@@ -148,13 +168,7 @@ class SubscriptionController extends Controller
             ], 400);
         }
 
-        if ($subscription->hasExpired()) {
-            return response()->json([
-                'message' => 'Cannot activate expired subscription'
-            ], 400);
-        }
-
-        $subscription->update(['status' => 'active']);
+        $subscription = $this->subscriptionActivationService->activate($subscription);
 
         return response()->json([
             'message' => 'Subscription activated successfully',

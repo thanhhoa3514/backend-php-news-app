@@ -76,14 +76,7 @@ class TagController extends Controller
      */
     public function show(string $idOrSlug): JsonResponse
     {
-        $tag = Tag::withCount([
-            'news as news_count' => function ($newsQuery) {
-                $newsQuery->published()->free();
-            }
-        ])
-            ->where('id', $idOrSlug)
-            ->orWhere('slug', $idOrSlug)
-            ->firstOrFail();
+        $tag = $this->resolveTagByIdOrSlug($idOrSlug, true);
 
         return response()->json($tag);
     }
@@ -95,10 +88,7 @@ class TagController extends Controller
     {
         $perPage = $request->get('per_page', 10);
 
-        // Find tag by id or slug
-        $tag = Tag::where('id', $idOrSlug)
-            ->orWhere('slug', $idOrSlug)
-            ->firstOrFail();
+        $tag = $this->resolveTagByIdOrSlug($idOrSlug);
 
         $news = $tag->news()
             ->with(['category', 'user', 'tags'])
@@ -111,6 +101,31 @@ class TagController extends Controller
             'tag' => $tag,
             'news' => $news
         ]);
+    }
+
+    private function resolveTagByIdOrSlug(string $idOrSlug, bool $withNewsCount = false): Tag
+    {
+        $tagQuery = Tag::query();
+
+        if ($withNewsCount) {
+            $tagQuery->withCount([
+                'news as news_count' => function ($newsQuery) {
+                    $newsQuery->published()->free();
+                }
+            ]);
+        }
+
+        $tag = (clone $tagQuery)
+            ->where('slug', $idOrSlug)
+            ->first();
+
+        if ($tag) {
+            return $tag;
+        }
+
+        return $tagQuery
+            ->where('id', $idOrSlug)
+            ->firstOrFail();
     }
 
     /**
