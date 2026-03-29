@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Services\NotificationDispatchService;
 use App\Services\Payments\SePayPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +14,7 @@ class WebhookController extends Controller
 {
     public function __construct(
         private readonly SePayPaymentService $sePayPaymentService,
+        private readonly NotificationDispatchService $notificationDispatchService,
     ) {
     }
 
@@ -159,5 +161,8 @@ class WebhookController extends Controller
             'start_date' => $startDate,
             'end_date' => $endDate,
         ]);
+
+        $subscription->loadMissing(['user', 'plan']);
+        $this->notificationDispatchService->notifyPremiumActivated($subscription);
     }
 }

@@ -6,12 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Subscription;
 use App\Models\Plan;
+use App\Services\NotificationDispatchService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class SubscriptionController extends Controller
 {
     use AuthorizesApiRequests;
+
+    public function __construct(
+        private readonly NotificationDispatchService $notificationDispatchService,
+    ) {
+    }
 
     /**
      * Display a listing of subscriptions
@@ -96,6 +102,7 @@ class SubscriptionController extends Controller
     {
         $this->ensureAdmin();
         $subscription = Subscription::findOrFail($id);
+        $wasActive = $subscription->status === 'active';
 
         $validated = $request->validate([
             'status' => 'sometimes|required|in:active,expired,cancelled,pending',
@@ -107,6 +114,10 @@ class SubscriptionController extends Controller
 
         $subscription->update($validated);
         $subscription->load(['user', 'plan']);
+
+        if (!$wasActive && $subscription->status === 'active') {
+            $this->notificationDispatchService->notifyPremiumActivated($subscription);
+        }
 
         return response()->json($subscription);
     }
@@ -155,6 +166,8 @@ class SubscriptionController extends Controller
         }
 
         $subscription->update(['status' => 'active']);
+        $subscription->load(['user', 'plan']);
+        $this->notificationDispatchService->notifyPremiumActivated($subscription);
 
         return response()->json([
             'message' => 'Subscription activated successfully',

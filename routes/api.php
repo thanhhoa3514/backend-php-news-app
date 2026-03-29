@@ -16,6 +16,9 @@ use App\Http\Controllers\Api\OtpController;
 use App\Http\Controllers\Api\AiGenerationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\WebhookController;
+use App\Http\Controllers\Api\FollowController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\NotificationPreferenceController;
 
 /*
 |--------------------------------------------------------------------------
@@ -142,6 +145,24 @@ Route::prefix('v1')->group(function () {
         Route::post('/{id}/cancel', [SubscriptionController::class, 'cancel']);
         Route::post('/{id}/activate', [SubscriptionController::class, 'activate']);
         Route::delete('/{id}', [SubscriptionController::class, 'destroy']);
+    });
+
+    Route::middleware('auth:api')->prefix('follows')->group(function () {
+        Route::get('/', [FollowController::class, 'index']);
+        Route::post('/categories/{categoryId}', [FollowController::class, 'followCategory']);
+        Route::delete('/categories/{categoryId}', [FollowController::class, 'unfollowCategory']);
+        Route::post('/tags/{tagId}', [FollowController::class, 'followTag']);
+        Route::delete('/tags/{tagId}', [FollowController::class, 'unfollowTag']);
+    });
+
+    Route::middleware('auth:api')->prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/digest-preview', [NotificationController::class, 'digestPreview']);
+        Route::post('/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('/{notificationId}/read', [NotificationController::class, 'markRead']);
+        Route::get('/preferences', [NotificationPreferenceController::class, 'show']);
+        Route::put('/preferences', [NotificationPreferenceController::class, 'update']);
+        Route::patch('/preferences', [NotificationPreferenceController::class, 'update']);
     });
 
     // User routes (protected)

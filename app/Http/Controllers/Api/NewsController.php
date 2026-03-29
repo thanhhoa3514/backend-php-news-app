@@ -8,6 +8,7 @@ use App\Models\News;
 use App\Models\AiGeneration;
 use App\Models\User;
 use App\Services\ImageService;
+use App\Services\NotificationDispatchService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,11 @@ use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 class NewsController extends Controller
 {
     use AuthorizesApiRequests;
+
+    public function __construct(
+        private readonly NotificationDispatchService $notificationDispatchService,
+    ) {
+    }
 
     /**
      * Display a listing of published news
@@ -216,6 +222,10 @@ class NewsController extends Controller
 
         $news->load(['category', 'user', 'tags']);
 
+        if ($news->isPublished()) {
+            $this->notificationDispatchService->notifyNewsPublished($news);
+        }
+
         return response()->json($news, 201);
     }
 
@@ -263,6 +273,8 @@ class NewsController extends Controller
         $tags = $validated['tags'] ?? null;
         unset($validated['tags']);
 
+        $wasPublished = $news->isPublished();
+
         $news->update($validated);
 
         if ($tags !== null) {
@@ -270,6 +282,10 @@ class NewsController extends Controller
         }
 
         $news->load(['category', 'user', 'tags']);
+
+        if (!$wasPublished && $news->isPublished()) {
+            $this->notificationDispatchService->notifyNewsPublished($news);
+        }
 
         return response()->json($news);
     }
@@ -384,6 +400,8 @@ class NewsController extends Controller
         }
 
         $news->load(['category', 'user']);
+
+        $this->notificationDispatchService->notifyNewsPublished($news);
 
         return response()->json([
             'message' => 'AI article published successfully. Image optimization running in background.',
