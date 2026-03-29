@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Log;
 
 class TagController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of the resource.
      */
@@ -21,7 +24,11 @@ class TagController extends Controller
         $search = $request->get('q');
         $all = $request->get('all'); // If true, return all tags without pagination
 
-        $query = Tag::withCount('news');
+        $query = Tag::withCount([
+            'news as news_count' => function ($newsQuery) {
+                $newsQuery->published()->free();
+            }
+        ]);
 
         if ($search) {
             $query->where('name', 'like', "%{$search}%")
@@ -45,6 +52,7 @@ class TagController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         Log::info($request->all());
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:tags,name',
@@ -66,9 +74,10 @@ class TagController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(string $id): JsonResponse
+    public function show(string $idOrSlug): JsonResponse
     {
-        $tag = Tag::withCount('news')->findOrFail($id);
+        $tag = $this->resolveTagByIdOrSlug($idOrSlug, true);
+
         return response()->json($tag);
     }
 
@@ -79,15 +88,12 @@ class TagController extends Controller
     {
         $perPage = $request->get('per_page', 10);
 
-        // Find tag by id or slug
-        $tag = Tag::where('id', $idOrSlug)
-            ->orWhere('slug', $idOrSlug)
-            ->firstOrFail();
+        $tag = $this->resolveTagByIdOrSlug($idOrSlug);
 
         $news = $tag->news()
             ->with(['category', 'user', 'tags'])
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now())
+            ->published()
+            ->free()
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
@@ -97,11 +103,37 @@ class TagController extends Controller
         ]);
     }
 
+    private function resolveTagByIdOrSlug(string $idOrSlug, bool $withNewsCount = false): Tag
+    {
+        $tagQuery = Tag::query();
+
+        if ($withNewsCount) {
+            $tagQuery->withCount([
+                'news as news_count' => function ($newsQuery) {
+                    $newsQuery->published()->free();
+                }
+            ]);
+        }
+
+        $tag = (clone $tagQuery)
+            ->where('slug', $idOrSlug)
+            ->first();
+
+        if ($tag) {
+            return $tag;
+        }
+
+        return $tagQuery
+            ->where('id', $idOrSlug)
+            ->firstOrFail();
+    }
+
     /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         Log::info($request->all());
         $tag = Tag::findOrFail($id);
 
@@ -127,6 +159,7 @@ class TagController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $tag = Tag::findOrFail($id);
         
         // Detach from all news first (although cascade delete on foreign key might handle this, explicit is safe)

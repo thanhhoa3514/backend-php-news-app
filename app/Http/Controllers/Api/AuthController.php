@@ -48,15 +48,15 @@ class AuthController extends Controller
             $user->roles()->attach($userRole->id);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registration successful! You can now login.',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ]
-        ], 201);
+        $token = JWTAuth::fromUser($user);
+        $user->load('roles');
+
+        return $this->buildAuthenticatedResponse(
+            $user,
+            $token,
+            'Registration successful',
+            201
+        );
     }
 
     /**
@@ -124,8 +124,6 @@ class AuthController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
         ];
-        $useCookies = $validated['use_cookies'] ?? false;
-
         try {
             if (!$token = JWTAuth::attempt($credentials)) {
                 return response()->json([
@@ -139,30 +137,8 @@ class AuthController extends Controller
         }
 
         $user = auth()->user()->load('roles');
-        $expiresIn = JWTAuth::factory()->getTTL() * 60;
 
-        $response = response()->json([
-            'message' => 'Login successful',
-            'user' => $user,
-            'token' => $token, // Return token in body for localStorage storage
-            'token_type' => 'bearer',
-            'expires_in' => $expiresIn
-        ]);
-
-        // Also set httpOnly cookie as backup (may not work with third-party cookie blocking)
-        $response->cookie(
-            'jwt_token',
-            $token,
-            $expiresIn / 60, // minutes
-            '/',
-            null,
-            true, // secure (required for SameSite=none)
-            true, // httpOnly
-            false,
-            'none' // SameSite: none for cross-domain cookies
-        );
-
-        return $response;
+        return $this->buildAuthenticatedResponse($user, $token, 'Login successful');
     }
 
     /**
@@ -172,25 +148,10 @@ class AuthController extends Controller
     {
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
-            
-            $response = response()->json([
+
+            return $this->clearAuthCookie(response()->json([
                 'message' => 'Logged out successfully'
-            ]);
-
-            // Always clear cookie with SameSite=none for cross-domain
-            $response->cookie(
-                'jwt_token',
-                '',
-                -1, // expire immediately
-                '/',
-                null,
-                true, // secure (required for SameSite=none)
-                true,
-                false,
-                'none' // SameSite: none for cross-domain cookies
-            );
-
-            return $response;
+            ]));
         } catch (JWTException $e) {
             return response()->json([
                 'message' => 'Failed to logout, please try again'
@@ -224,29 +185,9 @@ class AuthController extends Controller
     {
         try {
             $token = JWTAuth::refresh(JWTAuth::getToken());
-            $expiresIn = JWTAuth::factory()->getTTL() * 60;
+            $user = auth()->user()->load('roles');
 
-            $response = response()->json([
-                'message' => 'Token refreshed successfully',
-                // 'token' => $token,
-                'token_type' => 'bearer',
-                'expires_in' => $expiresIn
-            ]);
-
-            // Set new httpOnly cookie with SameSite=none for cross-domain
-            $response->cookie(
-                'jwt_token',
-                $token,
-                $expiresIn / 60, // minutes
-                '/',
-                null,
-                true, // secure (required for SameSite=none)
-                true, // httpOnly
-                false,
-                'none' // SameSite: none for cross-domain cookies
-            );
-
-            return $response;
+            return $this->buildAuthenticatedResponse($user, $token, 'Token refreshed successfully');
         } catch (JWTException $e) {
             return response()->json([
                 'message' => 'Could not refresh token'
@@ -262,9 +203,9 @@ class AuthController extends Controller
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
 
-            return response()->json([
+            return $this->clearAuthCookie(response()->json([
                 'message' => 'Token revoked successfully'
-            ]);
+            ]));
         } catch (JWTException $e) {
             return response()->json([
                 'message' => 'Could not revoke token'
@@ -328,5 +269,57 @@ class AuthController extends Controller
             'user' => $user
         ]);
     }
-}
 
+    private function buildAuthenticatedResponse(
+        User $user,
+        string $token,
+        string $message,
+        int $status = 200
+    ): JsonResponse {
+        $expiresIn = JWTAuth::factory()->getTTL() * 60;
+        $isSecure = app()->environment('production');
+        $sameSite = $isSecure ? 'none' : 'lax';
+
+        $response = response()->json([
+            'message' => $message,
+            'user' => $user,
+            'token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $expiresIn,
+        ], $status);
+
+        $response->cookie(
+            'jwt_token',
+            $token,
+            $expiresIn / 60,
+            '/',
+            null,
+            $isSecure,
+            true,
+            false,
+            $sameSite
+        );
+
+        return $response;
+    }
+
+    private function clearAuthCookie(JsonResponse $response): JsonResponse
+    {
+        $isSecure = app()->environment('production');
+        $sameSite = $isSecure ? 'none' : 'lax';
+
+        $response->cookie(
+            'jwt_token',
+            '',
+            -1,
+            '/',
+            null,
+            $isSecure,
+            true,
+            false,
+            $sameSite
+        );
+
+        return $response;
+    }
+}

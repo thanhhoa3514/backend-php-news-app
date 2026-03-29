@@ -14,12 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function () {
             // These routes use the API middleware (CORS, JSON formatting) but DO NOT have the /api prefix
             Route::middleware('api')->group(function () {
-                Route::get('/users', [\App\Http\Controllers\Api\UserController::class, 'index']);
-                Route::get('/users/{id}', [\App\Http\Controllers\Api\UserController::class, 'show']);
-                Route::post('/users', [\App\Http\Controllers\Api\UserController::class, 'store']);
-                Route::put('/users/{id}', [\App\Http\Controllers\Api\UserController::class, 'update']);
-                Route::patch('/users/{id}', [\App\Http\Controllers\Api\UserController::class, 'update']);
-                Route::delete('/users/{id}', [\App\Http\Controllers\Api\UserController::class, 'destroy']);
+                Route::get('/users', [\App\Http\Controllers\Api\UserController::class, 'publicIndex']);
+                Route::get('/users/{id}', [\App\Http\Controllers\Api\UserController::class, 'publicShow']);
             });
         }
     )

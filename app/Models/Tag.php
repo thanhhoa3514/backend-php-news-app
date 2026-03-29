@@ -24,5 +24,9 @@ class Tag extends Model
     {
         return $this->belongsToMany(News::class, 'news_tag');
     }
-}
 
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tag_user_follows')->withTimestamps();
+    }
+}

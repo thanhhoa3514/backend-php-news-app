@@ -4,16 +4,24 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subscription;
+use App\Services\Payments\SePayPaymentService;
+use App\Services\SubscriptionActivationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
 {
+    public function __construct(
+        private readonly SePayPaymentService $sePayPaymentService,
+        private readonly SubscriptionActivationService $subscriptionActivationService,
+    ) {
+    }
+
     public function handleWebhook(Request $request)
     {
         $payload = $request->getContent();
         $sig_header = $request->header('Stripe-Signature');
-        $endpoint_secret = env('STRIPE_WEBHOOK_SECRET');
+        $endpoint_secret = config('services.stripe.webhook_secret');
 
         try {
             $event = \Stripe\Webhook::constructEvent($payload, $sig_header, $endpoint_secret);
@@ -34,12 +42,9 @@ class WebhookController extends Controller
                 $subscriptionId = $session->metadata->subscription_id ?? null;
                 
                 if ($subscriptionId && $session->payment_status === 'paid') {
-                    $subscription = Subscription::find($subscriptionId);
+                    $subscription = Subscription::with('plan')->find($subscriptionId);
                     if ($subscription) {
-                        $subscription->update([
-                            'status' => 'active',
-                            'transaction_id' => $session->id,
-                        ]);
+                        $this->subscriptionActivationService->activate($subscription, $session->id);
                         Log::info("Subscription activated via Checkout: ID=" . $subscriptionId);
                     }
                 }
@@ -62,5 +67,84 @@ class WebhookController extends Controller
         }
 
         return response()->json(['status' => 'success']);
+    }
+
+    public function handleSePayWebhook(Request $request)
+    {
+        if (!$this->sePayPaymentService->verifyWebhookAuthorization($request->header('Authorization'))) {
+            Log::warning('SePay webhook authorization failed.');
+
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $payload = $request->all();
+
+        if (($payload['transferType'] ?? null) !== 'in') {
+            return response()->json(['success' => true, 'message' => 'Ignored transfer type']);
+        }
+
+        $subscriptionId = $this->sePayPaymentService->extractSubscriptionIdFromContent($payload['content'] ?? $payload['code'] ?? null);
+
+        if (!$subscriptionId) {
+            Log::warning('SePay webhook did not include a recognizable subscription reference.', [
+                'content' => $payload['content'] ?? null,
+                'code' => $payload['code'] ?? null,
+                'referenceCode' => $payload['referenceCode'] ?? null,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'No matching subscription reference']);
+        }
+
+        $subscription = Subscription::with('plan')->find($subscriptionId);
+
+        if (!$subscription) {
+            Log::warning('SePay webhook referenced a missing subscription.', [
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Subscription not found']);
+        }
+
+        if ($subscription->payment_method !== 'sepay') {
+            Log::warning('SePay webhook matched a subscription owned by another provider.', [
+                'subscription_id' => $subscriptionId,
+                'payment_method' => $subscription->payment_method,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Provider mismatch']);
+        }
+
+        $transferAmount = (int) ($payload['transferAmount'] ?? 0);
+        $expectedAmount = $this->sePayPaymentService->expectedAmountVnd($subscription->plan);
+
+        if ($transferAmount !== $expectedAmount) {
+            Log::warning('SePay webhook amount mismatch.', [
+                'subscription_id' => $subscriptionId,
+                'expected_amount' => $expectedAmount,
+                'received_amount' => $transferAmount,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Amount mismatch ignored']);
+        }
+
+        if ($subscription->status === 'active') {
+            return response()->json(['success' => true, 'message' => 'Subscription already active']);
+        }
+
+        $providerTransactionId = $payload['referenceCode']
+            ?? ($payload['id'] ?? $subscription->transaction_id);
+
+        $this->subscriptionActivationService->activate(
+            $subscription,
+            is_scalar($providerTransactionId) ? (string) $providerTransactionId : null
+        );
+
+        Log::info('Subscription activated via SePay webhook.', [
+            'subscription_id' => $subscriptionId,
+            'reference_code' => $payload['referenceCode'] ?? null,
+            'transaction_id' => $payload['id'] ?? null,
+        ]);
+
+        return response()->json(['success' => true]);
     }
 }

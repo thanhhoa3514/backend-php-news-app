@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -10,13 +11,19 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 class CategoryController extends Controller
 {
+    use AuthorizesApiRequests;
+
     /**
      * Display a listing of categories
      */
     public function index(): JsonResponse
     {
         $categories = \Illuminate\Support\Facades\Cache::remember('categories.all', 3600, function () {
-            return Category::withCount('news')
+            return Category::withCount([
+                'news as news_count' => function ($query) {
+                    $query->published()->free();
+                }
+            ])
                 ->orderBy('name')
                 ->get();
         });
@@ -33,7 +40,11 @@ class CategoryController extends Controller
         
         $category = \Illuminate\Support\Facades\Cache::remember('category.detail.' . $slug, 3600, function () use ($slug) {
             return Category::where('slug', $slug)
-                ->withCount('news')
+                ->withCount([
+                    'news as news_count' => function ($query) {
+                        $query->published()->free();
+                    }
+                ])
                 ->firstOrFail();
         });
 
@@ -53,6 +64,7 @@ class CategoryController extends Controller
         $news = $category->news()
             ->with(['category', 'user', 'tags'])
             ->published()
+            ->free()
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
@@ -64,6 +76,7 @@ class CategoryController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:categories,slug',
@@ -84,6 +97,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $category = Category::findOrFail($id);
 
         $validated = $request->validate([
@@ -106,6 +120,7 @@ class CategoryController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $category = Category::findOrFail($id);
         
         // Check if category has news
@@ -122,4 +137,3 @@ class CategoryController extends Controller
         ]);
     }
 }
-

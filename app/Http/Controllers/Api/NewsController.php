@@ -3,15 +3,29 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\News;
 use App\Models\AiGeneration;
+use App\Models\User;
 use App\Services\ImageService;
+use App\Services\NotificationDispatchService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
+use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 
 class NewsController extends Controller
 {
+    use AuthorizesApiRequests;
+
+    public function __construct(
+        private readonly NotificationDispatchService $notificationDispatchService,
+    ) {
+    }
+
     /**
      * Display a listing of published news
      */
@@ -23,6 +37,12 @@ class NewsController extends Controller
         $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
         $page = max((int) $request->get('page', 1), 1);
 
+        if (filter_var($isPremium, FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json([
+                'message' => 'Premium listings require an entitled account and are not available on the public feed.',
+            ], 403);
+        }
+
         $cacheKey = 'news.index.' . md5(json_encode([
             'category_id' => $categoryId,
             'is_premium'  => $isPremium,
@@ -31,17 +51,14 @@ class NewsController extends Controller
             'page'        => $page,
         ]));
 
-        $fetchData = function () use ($categoryId, $isPremium, $tagId, $perPage) {
+        $fetchData = function () use ($categoryId, $tagId, $perPage) {
             $query = News::with(['category', 'user', 'tags'])
                 ->published()
+                ->free()
                 ->orderBy('published_at', 'desc');
 
             if ($categoryId) {
                 $query->where('category_id', $categoryId);
-            }
-
-            if ($isPremium !== null) {
-                $query->where('is_premium', filter_var($isPremium, FILTER_VALIDATE_BOOLEAN));
             }
 
             if ($tagId) {
@@ -66,11 +83,9 @@ class NewsController extends Controller
     /**
      * Display all news (for admin)
      */
-    /**
-     * Display all news (for admin)
-     */
     public function all(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $perPage = $request->get('per_page', 10);
         $categoryId = $request->get('category_id');
         $status = $request->get('status');
@@ -78,6 +93,10 @@ class NewsController extends Controller
         
         $query = News::with(['category', 'user', 'tags'])
             ->orderBy('created_at', 'desc');
+
+        if (!$user->isAdmin()) {
+            $query->where('user_id', $user->id);
+        }
 
         if ($categoryId && $categoryId !== 'all') {
             $query->where('category_id', $categoryId);
@@ -114,6 +133,12 @@ class NewsController extends Controller
         $query = $request->get('q', '');
         $perPage = $request->get('per_page', 10);
 
+        if (filter_var($request->get('is_premium'), FILTER_VALIDATE_BOOLEAN)) {
+            return response()->json([
+                'message' => 'Premium search results require an entitled account and are not exposed on the public search endpoint.'
+            ], 403);
+        }
+
         if (empty($query)) {
             return response()->json([
                 'data' => [],
@@ -123,6 +148,7 @@ class NewsController extends Controller
 
         $news = News::with(['category', 'user', 'tags'])
             ->published()
+            ->free()
             ->search($query)
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
@@ -133,9 +159,20 @@ class NewsController extends Controller
     /**
      * Display the specified news
      */
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
         $news = News::with(['category', 'user', 'tags'])->findOrFail($id);
+        $user = $this->resolveOptionalUser($request);
+
+        if (!$news->isPublished() && !$this->canPreviewArticle($news, $user)) {
+            abort(404);
+        }
+
+        if ($news->isPremium() && !$this->canReadPremiumArticle($news, $user)) {
+            return response()->json([
+                'message' => 'Premium subscription required to access this article.',
+            ], 403);
+        }
 
         return response()->json($news);
     }
@@ -145,6 +182,7 @@ class NewsController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         Log::info('News store request: ' . json_encode($request->all()));
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -152,12 +190,16 @@ class NewsController extends Controller
             'content' => 'required|string',
             'thumbnail' => 'nullable|image|max:5120', // 5MB max for file uploads
             'category_id' => 'required|exists:categories,id',
-            'user_id' => 'required|exists:users,id',
+            'user_id' => 'nullable|exists:users,id',
             'published_at' => 'nullable|date',
             'is_premium' => 'nullable|boolean',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
         ]);
+
+        $validated['user_id'] = $user->isAdmin()
+            ? ($validated['user_id'] ?? $user->id)
+            : $user->id;
 
         // Handle file upload to Cloudinary
         if ($request->hasFile('thumbnail')) {
@@ -180,6 +222,10 @@ class NewsController extends Controller
 
         $news->load(['category', 'user', 'tags']);
 
+        if ($news->isPublished()) {
+            $this->notificationDispatchService->notifyNewsPublished($news);
+        }
+
         return response()->json($news, 201);
     }
 
@@ -188,7 +234,9 @@ class NewsController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $news = News::findOrFail($id);
+        $this->ensureOwnerOrAdmin($news->user_id, $user, 'You can only modify your own articles.');
 
         // Check if thumbnail is a file or string
         $thumbnailRule = 'nullable|string|max:500';
@@ -202,12 +250,16 @@ class NewsController extends Controller
             'content' => 'sometimes|required|string',
             'thumbnail' => $thumbnailRule,
             'category_id' => 'sometimes|required|exists:categories,id',
-            'user_id' => 'sometimes|required|exists:users,id',
+            'user_id' => 'nullable|exists:users,id',
             'published_at' => 'nullable|date',
             'is_premium' => 'nullable|boolean',
             'tags' => 'nullable|array',
             'tags.*' => 'exists:tags,id',
         ]);
+
+        if (!$user->isAdmin()) {
+            $validated['user_id'] = $news->user_id;
+        }
 
         // Handle file upload to Cloudinary
         if ($request->hasFile('thumbnail')) {
@@ -221,6 +273,8 @@ class NewsController extends Controller
         $tags = $validated['tags'] ?? null;
         unset($validated['tags']);
 
+        $wasPublished = $news->isPublished();
+
         $news->update($validated);
 
         if ($tags !== null) {
@@ -228,6 +282,10 @@ class NewsController extends Controller
         }
 
         $news->load(['category', 'user', 'tags']);
+
+        if (!$wasPublished && $news->isPublished()) {
+            $this->notificationDispatchService->notifyNewsPublished($news);
+        }
 
         return response()->json($news);
     }
@@ -237,7 +295,9 @@ class NewsController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $news = News::findOrFail($id);
+        $this->ensureOwnerOrAdmin($news->user_id, $user, 'You can only delete your own articles.');
         $news->delete();
 
         return response()->json([
@@ -250,6 +310,7 @@ class NewsController extends Controller
      */
     public function generateAi(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'category' => 'required|string',
             'count' => 'required|integer|min:1|max:5',
@@ -291,18 +352,25 @@ class NewsController extends Controller
      */
     public function publishAiArticle(Request $request): JsonResponse
     {
+        $user = $this->ensureEditorOrAdmin();
         $validated = $request->validate([
             'generation_id' => 'required|exists:ai_generations,id',
             'article' => 'required|array',
             'article.title' => 'required|string',
             'article.content' => 'required|string',
             'article.category_id' => 'required|exists:categories,id',
-            'article.user_id' => 'required|exists:users,id',
+            'article.user_id' => 'nullable|exists:users,id',
             'article.thumbnail' => 'nullable|url|max:2048',
         ]);
 
         $article = $validated['article'];
         $generationId = $validated['generation_id'];
+        $generation = AiGeneration::findOrFail($generationId);
+        $this->ensureOwnerOrAdmin($generation->user_id, $user, 'You can only publish your own AI generations.');
+
+        $article['user_id'] = $user->isAdmin()
+            ? ($article['user_id'] ?? $user->id)
+            : $user->id;
         
         $tempUrl = $article['thumbnail'] ?? null;
 
@@ -333,6 +401,8 @@ class NewsController extends Controller
 
         $news->load(['category', 'user']);
 
+        $this->notificationDispatchService->notifyNewsPublished($news);
+
         return response()->json([
             'message' => 'AI article published successfully. Image optimization running in background.',
             'data' => $news,
@@ -344,6 +414,7 @@ class NewsController extends Controller
      */
     public function editorStats(Request $request): JsonResponse
     {
+        $this->ensureEditorOrAdmin();
         $userId = auth()->id();
 
         // Count total articles created by this user
@@ -374,5 +445,59 @@ class NewsController extends Controller
             'totalViews' => $totalViews,
         ]);
     }
-}
 
+    private function canPreviewArticle(News $news, ?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->isAdmin()
+            || $user->hasRole('editor')
+            || (int) $user->id === (int) $news->user_id;
+    }
+
+    private function canReadPremiumArticle(News $news, ?User $user): bool
+    {
+        if (!$news->isPremium()) {
+            return true;
+        }
+
+        if (!$user) {
+            return false;
+        }
+
+        return $user->canAccessPremium() || $this->canPreviewArticle($news, $user);
+    }
+
+    private function resolveOptionalUser(Request $request): ?User
+    {
+        $user = auth()->user();
+
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        try {
+            $token = JWTAuth::getToken();
+
+            if (!$token && $request->hasCookie('jwt_token')) {
+                $token = $request->cookie('jwt_token');
+
+                if ($token) {
+                    JWTAuth::setToken($token);
+                }
+            }
+
+            if (!$token) {
+                return null;
+            }
+
+            $resolvedUser = JWTAuth::parseToken()->authenticate();
+
+            return $resolvedUser instanceof User ? $resolvedUser : null;
+        } catch (TokenExpiredException | TokenInvalidException | JWTException) {
+            return null;
+        }
+    }
+}

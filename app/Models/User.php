@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
@@ -23,6 +23,8 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'password',
         'avatar',
+        'email_notifications_enabled',
+        'digest_frequency',
     ];
 
     /**
@@ -45,6 +47,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'email_notifications_enabled' => 'boolean',
         ];
     }
 
@@ -62,6 +65,16 @@ class User extends Authenticatable implements JWTSubject
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'user_roles');
+    }
+
+    public function followedCategories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'category_user_follows')->withTimestamps();
+    }
+
+    public function followedTags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class, 'tag_user_follows')->withTimestamps();
     }
 
     /**
@@ -141,4 +154,3 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 }
-

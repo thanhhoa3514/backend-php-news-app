@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\AuthorizesApiRequests;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -10,11 +11,41 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
+    use AuthorizesApiRequests;
+
+    /**
+     * Public teacher demo: read-only user listing
+     */
+    public function publicIndex(Request $request): JsonResponse
+    {
+        $perPage = $request->get('per_page', 10);
+
+        $users = User::query()
+            ->select(['id', 'name', 'created_at'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        return response()->json($users);
+    }
+
+    /**
+     * Public teacher demo: read-only user detail
+     */
+    public function publicShow(string $id): JsonResponse
+    {
+        $user = User::query()
+            ->select(['id', 'name', 'created_at'])
+            ->findOrFail($id);
+
+        return response()->json($user);
+    }
+
     /**
      * Display a listing of users
      */
     public function index(Request $request): JsonResponse
     {
+        $this->ensureAdmin();
         $perPage = $request->get('per_page', 10);
         $roleSlug = $request->get('role');
 
@@ -36,6 +67,7 @@ class UserController extends Controller
      */
     public function show(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $user = User::with(['roles', 'subscriptions.plan'])
             ->withCount('news')
             ->findOrFail($id);
@@ -48,6 +80,7 @@ class UserController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->ensureAdmin();
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -78,6 +111,7 @@ class UserController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $user = User::findOrFail($id);
 
         $validated = $request->validate([
@@ -112,6 +146,7 @@ class UserController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $user = User::findOrFail($id);
         
         // Don't allow deleting users with published articles
@@ -133,10 +168,10 @@ class UserController extends Controller
      */
     public function roles(string $id): JsonResponse
     {
+        $this->ensureAdmin();
         $user = User::findOrFail($id);
         $roles = $user->roles()->with('permissions')->get();
 
         return response()->json($roles);
     }
 }
-

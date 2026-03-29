@@ -50,4 +50,10 @@ return [
     'api_key' => env('GEMINI_API_KEY'),
 ],
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'frontend_url' => env('FRONTEND_URL', 'https://monochrome-news.vercel.app'),
+    ],
+
 ];
