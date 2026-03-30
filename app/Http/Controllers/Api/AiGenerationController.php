@@ -14,7 +14,10 @@ class AiGenerationController extends Controller
     use AuthorizesApiRequests;
 
     /**
-     * Get AI generation history for the current user
+     * Get AI generation history for the current user.
+     * 
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
