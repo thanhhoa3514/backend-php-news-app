@@ -1,0 +1,39 @@
+name: Deploy to Render
+
+on:
+  workflow_run:
+    workflows:
+      - Backend CI
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: render-production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-production:
+    name: Trigger Backend Production Deploy
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deploy hook configuration
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Missing RENDER_DEPLOY_HOOK_URL GitHub secret." >&2
+            exit 1
+          fi
+
+      - name: Trigger Render production deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
